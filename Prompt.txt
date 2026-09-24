@@ -1,0 +1,139 @@
+Bạn là senior full-stack developer. Hãy build một web app Node.js cho đồ án "Quản lý đặt phòng khách sạn" dùng Amazon DynamoDB (single-table design). Đọc kỹ các file có sẵn trong thư mục gốc trước khi code:
+- HuongDan_DB_HotelBooking_v2.docx: thiết kế DB (PK/SK, GSI1-3, access patterns, quy tắc nghiệp vụ). Đây là nguồn chuẩn, KHÔNG được tự đổi cấu trúc khóa.
+- HotelBookingTable.json: dữ liệu mẫu (DynamoDB JSON, mỗi dòng 1 item).
+- seed.js: script tạo bảng + nạp dữ liệu. Giữ nguyên, chỉ thêm lệnh "npm run seed".
+
+========== NGUYÊN TẮC BẮT BUỘC ==========
+1. MỌI dữ liệu hiển thị và mọi thao tác đều đọc/ghi trực tiếp từ DynamoDB bảng "HotelBookingTable".
+   - KHÔNG có mock data, KHÔNG hardcode mảng phòng/giá/voucher/user trong code, KHÔNG lưu dữ liệu nghiệp vụ trong biến bộ nhớ hay file JSON.
+   - Giá phòng lấy từ item RoomType và Rate; voucher lấy từ item Voucher; danh sách phòng lấy từ item Room.
+   - Backend chỉ làm tầng truy vấn/ghi DB và kiểm tra quy tắc. Không tự sinh dữ liệu giả.
+2. Chỉ dùng Query/GetItem/TransactWrite theo đúng access pattern ở mục 5 của docx. KHÔNG dùng Scan (trừ khi tôi yêu cầu).
+3. Mọi thao tác ghi nhiều item phải dùng TransactWriteCommand, có ConditionExpression như docx mô tả.
+4. Đổi Status của Room/Booking thì luôn cập nhật cùng lúc: Status, GSI3PK, UpdatedAt và ADD Version 1.
+5. Field theo PascalCase; ID không lẫn tiền tố (tiền tố chỉ dùng trong PK/SK/GSI); thời điểm ISO UTC có Z; ngày lưu trú dạng YYYY-MM-DD; tiền là số nguyên VND.
+
+========== STACK ==========
+Monorepo 2 thư mục, chạy song song bằng "npm run dev" ở thư mục gốc (dùng concurrently):
+
+server/ — REST API
+- Node.js 18+, Express, @aws-sdk/client-dynamodb, @aws-sdk/lib-dynamodb, bcryptjs, jsonwebtoken, cookie-parser, cors, dotenv, zod (validate body).
+- Auth: JWT trong cookie httpOnly, sameSite=lax. Middleware requireAuth và requireRole("customer" | "admin").
+  Endpoint GET /api/auth/me trả user hiện tại (không trả PasswordHash).
+- CORS cho http://localhost:5173 với credentials: true.
+- .env: AWS_REGION, DDB_ENDPOINT, TABLE=HotelBookingTable, JWT_SECRET, PORT=4000, CLIENT_URL=http://localhost:5173.
+- Cấu trúc:
+  server/src/config/db.js
+  server/src/repositories/ (userRepo, roomRepo, bookingRepo, reportRepo — CHỈ ở đây mới gọi DynamoDB)
+  server/src/services/ (pricing, booking, auth — quy tắc nghiệp vụ)
+  server/src/routes/ (auth, rooms, bookings, admin), server/src/middlewares/
+- API trả JSON dạng { data } hoặc { error: { code, message } } với message tiếng Việt.
+  HTTP status đúng nghĩa: 400 validate, 401, 403, 404, 409 xung đột (phòng vừa bị đặt, email trùng, Version lệch).
+
+client/ — React SPA
+- Vite + React 18 (JavaScript), React Router v6, TanStack Query (gọi API + cache + refetch), axios (withCredentials: true, baseURL /api).
+- Vite proxy /api → http://localhost:4000 để cookie hoạt động.
+- UI: Tailwind CSS; biểu đồ: react-chartjs-2 + chart.js; thông báo: react-hot-toast; form: react-hook-form + zod.
+- AuthContext đọc /api/auth/me khi load app.
+  <ProtectedRoute role="customer|admin"> chặn route sai role (chuyển về /login hoặc trang 403).
+- Route:
+  /login, /register
+  /rooms (tìm phòng), /booking/:id/pay (đếm ngược 15 phút), /my-bookings, /my-bookings/:id
+  /admin (dashboard), /admin/rooms (CRUD), /admin/rooms/:id/logs
+- Cấu trúc:
+  client/src/api/ (hàm gọi API theo module)
+  client/src/pages/, client/src/components/, client/src/context/, client/src/hooks/
+- Frontend KHÔNG tự tính giá hay tự lọc phòng trống.
+  Mọi số liệu (giá từng đêm, tổng tiền, cọc, phòng trống, báo cáo) đều lấy từ API; API lấy từ DynamoDB.
+- Sau khi đặt, hủy, tạo, sửa, xóa phòng thì invalidate query tương ứng để UI cập nhật ngay.
+- Trang /admin tự refetch bảng trạng thái phòng mỗi 5 giây (refetchInterval).
+========== CHỨC NĂNG ==========
+A. ĐĂNG KÝ / ĐĂNG NHẬP
+- Đăng nhập: Query GSI2 với GSI2PK = "EMAIL#<email viết thường>", GSI2SK = "PROFILE", so sánh bcrypt.
+  + EntityType "Customer" → role customer.
+  + EntityType "Staff" với Role Admin hoặc Manager và IsActive = true → role admin.
+  + Staff khác, hoặc tài khoản không có PasswordHash → báo không được phép.
+- Đăng ký (chỉ tạo Customer): FullName, Email, Phone, Password, IDType, IDNumber.
+  + Sinh CustomerID kế tiếp dạng C0321... bằng một item đếm PK="COUNTER", SK="CUSTOMER", UpdateExpression "ADD Seq :1", ReturnValues UPDATED_NEW.
+    Dùng cùng cơ chế COUNTER cho BookingID (BK......), PaymentID (P......).
+  + Một TransactWrite gồm:
+    (1) Put Customer (IsGuestAccount = false, PasswordHash, GSI2PK/GSI2SK).
+    (2) Put UniqueEmail PK="UNIQUE#EMAIL#<email>" với attribute_not_exists(PK).
+    Nếu lỗi → báo "Email đã được sử dụng".
+- Tài khoản test (mật khẩu 123456): lethibich@gmail.com (customer), long.pham@sunrisehotel.vn (admin).
+
+B. NGƯỜI DÙNG (role customer)
+1. Tìm phòng: form chọn CheckInDate, CheckOutDate, số người lớn, trẻ trên 1m, trẻ dưới 1m, loại phòng (tùy chọn).
+   - Lấy phòng: Query PK="HOTEL#MAIN", begins_with(SK,"ROOM#"). Loại bỏ phòng Maintenance/OutOfOrder.
+   - Với mỗi đêm: Query GSI1, GSI1PK="NIGHT#<date>", begins_with(GSI1SK,"ROOMTYPE#<type>").
+     Đêm bị chiếm khi Status="Booked", hoặc Status="Held" và ExpiresAt > now.
+   - Lọc sức chứa: NumAdults + NumChildrenOver1m ≤ Capacity.
+   - Hiển thị card phòng: ảnh, loại, tầng, view, tiện nghi, giá từng đêm, tổng tiền.
+2. Tính giá:
+   - Giá đêm = BasePrice × Multiplier của Rate có Priority cao nhất bao phủ đêm đó (Query begins_with(SK,"RATE#<type>#")), làm tròn nghìn.
+   - Voucher: GetItem PK="VOUCHER#<code>", kiểm tra IsActive, hạn, MinOrder, MinNights, UsedCount < UsageLimit.
+   - TotalPrice = SubTotal − Discount; Deposit = 20% làm tròn nghìn; Remaining = TotalPrice − Deposit.
+3. Đặt phòng: đúng mục 13.4 của docx.
+   - Một TransactWrite gồm:
+     + Put Booking Status="Pending", ExpiresAt = now + 15 phút.
+     + Put RoomNight Held từng đêm, điều kiện "attribute_not_exists(PK) OR (Status = Held AND ExpiresAt < now)".
+     + Update Voucher ADD UsedCount 1 với điều kiện.
+   - TransactionCanceledException → báo "Phòng vừa được người khác đặt, vui lòng chọn phòng khác".
+4. Thanh toán cọc (giả lập cổng thanh toán): trang có đồng hồ đếm ngược 15 phút + nút "Thanh toán VNPay (demo)".
+   - Bấm → một TransactWrite gồm:
+     + Put Payment Deposit (PaymentMethod EWallet, TransactionRef ngẫu nhiên).
+     + Update Booking Status Pending → Confirmed (điều kiện Status = Pending và ExpiresAt > now), REMOVE ExpiresAt, cập nhật PaidAmount, GSI3PK.
+     + Update từng RoomNight Held → Booked, REMOVE ExpiresAt.
+5. Lịch sử đặt phòng: Query GSI2 GSI2PK="CUSTOMER#<id>", begins_with(GSI2SK,"BOOKING#"), mới nhất trước.
+   - Xem chi tiết: Query PK="BOOKING#<id>" để lấy cả Payment/Service/Invoice.
+6. Hủy booking Confirmed (theo mục 7.5 docx):
+   - Một TransactWrite gồm: Update Booking → Cancelled, Delete các RoomNight (điều kiện BookingID khớp), giảm UsedCount voucher.
+   - Nếu hủy trước 14:00 ngày check-in ≥ 48h → thêm Put Payment Refund.
+
+C. ADMIN (role admin)
+1. Dashboard báo cáo (dùng Chart.js; mọi số liệu query từ DB):
+   - Doanh thu theo tháng: Query GSI3 GSI3PK="INVMONTH#<yyyy-mm>" cho 12 tháng năm 2026, cộng TotalAmount (nhớ phân trang LastEvaluatedKey).
+     Biểu đồ cột; bảng top hóa đơn tháng đang chọn.
+   - Số booking theo trạng thái: Query GSI3 GSI3PK="BKSTATUS#<status>" với Select="COUNT" cho 6 trạng thái.
+   - Công suất phòng theo ngày trong tháng chọn: Query GSI1 GSI1PK="NIGHT#<date>" (Select COUNT, chỉ tính Booked) / tổng số phòng.
+   - Bảng trạng thái phòng hiện tại: Query GSI3 ROOMSTATUS#Available/Occupied/Cleaning/Maintenance/OutOfOrder, hiển thị sơ đồ theo tầng có màu.
+   - Khách đến hôm nay: GSI3 BKSTATUS#Confirmed, begins_with(GSI3SK,"CHECKIN#<today>").
+   - Khách đang ở: GSI3 BKSTATUS#CheckedIn.
+   - Điểm đánh giá: đọc RatingAvg, ReviewCount từ item Hotel; 10 review mới nhất: PK HOTEL#MAIN, begins_with REVIEW#, ScanIndexForward false.
+   - Có ô chọn ngày "hôm nay" (mặc định ngày thật). Dữ liệu mẫu lấy mốc 2026-09-24, nên thêm nút "Dùng ngày dữ liệu mẫu".
+2. CRUD phòng:
+   - List: Query PK=HOTEL#MAIN begins_with ROOM#, lọc theo tầng/loại/trạng thái.
+   - Create: form RoomNumber, Floor, RoomTypeID (dropdown lấy từ các item ROOMTYPE#), View, Amenities, Images.
+     + Tự sao chép RoomTypeName, Capacity, BasePrice, BedType, AreaM2 từ RoomType.
+     + Put với attribute_not_exists(PK) (trùng số phòng thì báo lỗi).
+     + Set GSI3PK="ROOMSTATUS#Available", GSI3SK="FLOOR#<ff>#ROOM#<id>", Version 1.
+   - Update: sửa thông tin và Status (Available/Maintenance/OutOfOrder).
+     + Điều kiện Version khớp (optimistic locking); lệch thì báo "Dữ liệu đã bị người khác sửa, tải lại".
+     + Không cho đổi Status khi phòng đang Occupied.
+     + Đổi Status thì ghi thêm RoomStatusLog trong cùng transaction.
+   - Delete:
+     + Chỉ cho xóa khi Query GSI1 GSI1PK="ROOM#<id>" không có booking nào VÀ Query PK="ROOM#<id>" không có RoomNight.
+     + Nếu có lịch sử → không xóa, gợi ý chuyển Status OutOfOrder.
+   - Xem lịch sử trạng thái phòng: Query PK="ROOM#<id>", begins_with(SK,"LOG#").
+
+========== CHẤT LƯỢNG ==========
+- Mỗi hàm repository ghi comment 1 dòng: access pattern số mấy trong docx.
+- - Validate bằng zod ở cả client (react-hook-form) và server; server là nơi quyết định cuối cùng.
+- Format tiền kiểu 1.500.000đ (Intl.NumberFormat vi-VN), ngày dd/MM/yyyy; tạo sẵn các hàm format dùng chung trong client/src/utils.
+- Có loading skeleton, empty state, trang 403 và 404.
+- Lỗi 409 hiển thị toast rõ nghĩa. Riêng khi đặt phòng bị 409 thì tự refetch danh sách phòng trống.
+- README.md gồm:
+  + Cách chạy DynamoDB Local bằng Docker, "npm run seed", "npm run dev".
+  + Danh sách tài khoản test.
+  + Bảng map chức năng → access pattern.
+
+========== KIỂM TRA TRƯỚC KHI BÁO XONG ==========
+Chạy seed trên DynamoDB Local rồi test tay đủ các case:
+1. Đăng ký email mới OK; đăng ký trùng email bị chặn.
+2. Customer không vào được /admin.
+3. Tìm phòng 25/09–27/09/2026 loại DLX: phòng 205 KHÔNG xuất hiện (đã có booking BK001960).
+4. Mở 2 tab cùng đặt 1 phòng cùng đêm: chỉ 1 tab thành công.
+5. Không thanh toán cọc trong 15 phút: phòng trở lại trống khi tìm.
+6. Doanh thu tháng 9/2026 trên dashboard = 753.007.000đ (khớp dữ liệu mẫu).
+7. Tạo, sửa, xóa phòng hoạt động; không xóa được phòng 101 vì có lịch sử.
+8. grep toàn project không còn dữ liệu nghiệp vụ hardcode.

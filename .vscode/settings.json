@@ -1,0 +1,7 @@
+{
+  // HotelBookingTable.json là DynamoDB JSON dạng JSON Lines (mỗi dòng 1 item, docx mục 9.4).
+  // Trình kiểm tra JSON mặc định coi cả file là 1 giá trị nên báo nhầm "End of file expected".
+  "files.associations": {
+    "**/Database/HotelBookingTable.json": "jsonl"
+  }
+}

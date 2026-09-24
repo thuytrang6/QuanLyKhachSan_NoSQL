@@ -1,0 +1,22 @@
+{
+  "name": "hotel-booking-dynamodb",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Quản lý đặt phòng khách sạn — Amazon DynamoDB single-table design",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "seed": "node seed.js",
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "ddb:local": "docker run -d --name dynamodb-local -p 8000:8000 amazon/dynamodb-local"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}

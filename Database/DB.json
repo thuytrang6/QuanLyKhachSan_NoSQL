@@ -1,0 +1,346 @@
+{
+    "Hotel": {
+        "hotelID": "string (PK)",
+        "hotelName": "string",
+        "address": "string",
+        "city": "string",
+        "starRating": "1-5",
+        "phone": "string",
+        "amenities": [
+            "hồ bơi",
+            "gym",
+            "spa",
+            "bãi đỗ xe"
+        ]
+    },
+    "Room": {
+        "roomID": "string (PK)",
+        "roomNumber": "string",
+        "roomType": [
+            "thường",
+            "đôi",
+            "luxury"
+        ],
+        "capacityByType": {
+            "thường": [
+                2,
+                3,
+                4
+            ],
+            "đôi": [
+                2
+            ],
+            "luxury": [
+                2,
+                4
+            ]
+        },
+        "floor": "number",
+        "basePrice": "number",
+        "status": [
+            "Available",
+            "Booked",
+            "Occupied",
+            "Maintenance",
+            "Cleaning"
+        ]
+    },
+    "Customer": {
+        "customerID": "string (PK)",
+        "fullName": "string",
+        "dob": "date (ISO)",
+        "gender": [
+            "Nam",
+            "Nữ",
+            "Khác"
+        ],
+        "idType": [
+            "CCCD",
+            "CMND",
+            "Passport"
+        ],
+        "idNumber": "string",
+        "address": "string",
+        "phone": "string",
+        "email": "string"
+    },
+    "Staff": {
+        "staffID": "string (PK)",
+        "fullName": "string",
+        "role": [
+            "Receptionist",
+            "Housekeeping",
+            "Manager",
+            "Admin"
+        ],
+        "username": "string",
+        "passwordHash": "string"
+    },
+    "Booking": {
+        "bookingID": "string (PK)",
+        "hotelID": "string",
+        "roomID": "string",
+        "customerID": "string",
+        "bookingChannel": [
+            "Online",
+            "Offline-FrontDesk"
+        ],
+        "processedByStaffID": "string | null",
+        "checkInDate": "date (ISO)",
+        "checkOutDate": "date (ISO)",
+        "actualCheckInTime": "datetime | null",
+        "actualCheckOutTime": "datetime | null",
+        "numAdults": "number",
+        "numChildrenUnder1m": "number  // miễn phí, không tính đầu người",
+        "numChildrenOver1m": "number  // tính như 1 đầu người",
+        "earlyCheckInRequested": "boolean",
+        "lateCheckOutRequested": "boolean",
+        "notes": "string",
+        "voucherCode": "string | null",
+        "discountAmount": "number",
+        "totalPrice": "number  // tổng tiền phòng + dịch vụ - discount",
+        "depositPercent": "20  // cố định 20%",
+        "depositAmount": "number  // = totalPrice * 20%",
+        "remainingAmount": "number  // = totalPrice - depositAmount",
+        "status": [
+            "Pending",
+            "Deposited",
+            "Confirmed",
+            "CheckedIn",
+            "CheckedOut",
+            "Cancelled"
+        ]
+    },
+    "Payment": {
+        "paymentID": "string (PK)",
+        "bookingID": "string",
+        "paymentType": [
+            "Deposit",
+            "Remaining"
+        ],
+        "amount": "number",
+        "paymentMethod": [
+            "Cash",
+            "Transfer"
+        ],
+        "paymentStatus": [
+            "Pending",
+            "Paid"
+        ],
+        "paidAt": "datetime | null",
+        "note": "string  // VD: giữ chỗ, thanh toán lúc check-out"
+    },
+    "BookingService": {
+        "bookingServiceID": "string (PK)",
+        "bookingID": "string",
+        "serviceID": "string",
+        "quantity": "number",
+        "priceAtBooking": "number",
+        "addedBy": [
+            "Customer",
+            "Staff"
+        ]
+    },
+    "Service": {
+        "serviceID": "string (PK)",
+        "serviceName": "string",
+        "category": [
+            "Ăn uống",
+            "Spa",
+            "Giặt ủi",
+            "Khác"
+        ],
+        "price": "number"
+    },
+    "Surcharge": {
+        "surchargeID": "string (PK)",
+        "bookingID": "string",
+        "type": [
+            "Damage",
+            "EarlyCheckIn",
+            "LateCheckOut",
+            "Other"
+        ],
+        "amount": "number",
+        "description": "string",
+        "recordedByStaffID": "string"
+    },
+    "Rate": {
+        "rateID": "string (PK)",
+        "roomType": [
+            "thường",
+            "đôi",
+            "luxury"
+        ],
+        "seasonName": "string",
+        "startDate": "date (ISO)",
+        "endDate": "date (ISO)",
+        "pricePerNight": "number"
+    },
+    "Voucher": {
+        "voucherID": "string (PK)",
+        "code": "string",
+        "discountType": [
+            "Percent",
+            "Fixed"
+        ],
+        "value": "number",
+        "validFrom": "date (ISO)",
+        "validTo": "date (ISO)",
+        "status": [
+            "Active",
+            "Expired",
+            "UsedUp"
+        ]
+    },
+    "Invoice": {
+        "invoiceID": "string (PK)",
+        "bookingID": "string",
+        "roomCharge": "number",
+        "serviceCharge": "number",
+        "surchargeTotal": "number",
+        "discountApplied": "number",
+        "totalAmount": "number",
+        "depositPaid": "number",
+        "remainingPaid": "number",
+        "finalPaymentMethod": [
+            "Cash",
+            "Transfer"
+        ],
+        "issuedAt": "datetime  // xuất lúc check-out"
+    },
+
+
+    "Note":{"Hotel&Room":"Hotel & Room (dữ liệu nền)"},
+
+    
+    "KhoiTao": [
+        {
+            "PK": "HOTEL#MAIN",
+            "SK": "METADATA",
+            "HotelName": "Sunrise Hotel",
+            "City": "TP.HCM",
+            "StarRating": 4
+        },
+        {
+            "PK": "HOTEL#MAIN",
+            "SK": "ROOM#101",
+            "GSI1PK": "ROOM#101",
+            "GSI1SK": "STATUS#Available",
+            "RoomType": "Thường",
+            "Capacity": 3,
+            "BasePrice": 600000,
+            "Status": "Available"
+        },
+        {
+            "PK": "HOTEL#MAIN",
+            "SK": "ROOM#205",
+            "GSI1PK": "ROOM#205",
+            "GSI1SK": "STATUS#Available",
+            "RoomType": "Luxury",
+            "Capacity": 4,
+            "BasePrice": 1500000,
+            "Status": "Available"
+        },
+        {
+            "PK": "USER#S01",
+            "SK": "PROFILE",
+            "FullName": "Trần Thị Lan",
+            "Role": "Receptionist"
+        }
+    ],
+
+    "NghiepVuTaiQuay": [
+        {"":"Customer do lễ tân tạo từ CCCD"},
+        {
+            "PK": "CUSTOMER#C001",
+            "SK": "PROFILE",
+            "GSI2PK": "EMAIL#vana@gmail.com",
+            "FullName": "Nguyễn Văn A",
+            "IDType": "CCCD",
+            "IDNumber": "079xxxxxxxxx",
+            "Phone": "0909xxxxxx",
+            "Email": "vana@gmail.com"
+        },
+        {"":"Booking: 2 người lớn + 1 bé <1m (miễn phí) -> vẫn tính phòng 2 người"},
+        {
+            "PK": "CUSTOMER#C001",
+            "SK": "BOOKING#2026-09-20#BK1001",
+            "GSI1PK": "ROOM#101",
+            "GSI1SK": "BOOKING#2026-09-20",
+            "HotelID": "HOTEL#MAIN",
+            "RoomID": "ROOM#101",
+            "BookingChannel": "Offline-FrontDesk",
+            "ProcessedByStaffID": "USER#S01",
+            "CheckInDate": "2026-09-20",
+            "CheckOutDate": "2026-09-22",
+            "NumAdults": 2,
+            "NumChildrenUnder1m": 1,
+            "NumChildrenOver1m": 0,
+            "TotalPrice": 1200000,
+            "DepositPercent": 20,
+            "DepositAmount": 240000,
+            "RemainingAmount": 960000,
+            "Status": "Deposited"
+        },
+         {"":"Payment 1: cọc giữ chỗ, trả tiền mặt tại quầy"},
+        {
+            "PK": "BOOKING#BK1001",
+            "SK": "PAYMENT#P0001",
+            "PaymentType": "Deposit",
+            "Amount": 240000,
+            "PaymentMethod": "Cash",
+            "PaymentStatus": "Paid",
+            "PaidAt": "2026-09-06T10:00:00Z"
+        }
+    ],
+    "HeThong": [
+        {"":"Phát sinh phụ phí khi kiểm tra phòng"},
+        {
+            "PK": "CUSTOMER#C002",
+            "SK": "PROFILE",
+            "GSI2PK": "EMAIL#thib@gmail.com",
+            "FullName": "Lê Thị B",
+            "IDType": "CCCD",
+            "IDNumber": "079yyyyyyyyy",
+            "Phone": "0912xxxxxx",
+            "Email": "thib@gmail.com"
+        },
+
+        {"":"Thanh toán phần còn lại, có thể khác phương thức so với lúc cọc"},
+        {
+            "PK": "CUSTOMER#C002",
+            "SK": "BOOKING#2026-09-25#BK1002",
+            "GSI1PK": "ROOM#205",
+            "GSI1SK": "BOOKING#2026-09-25",
+            "HotelID": "HOTEL#MAIN",
+            "RoomID": "ROOM#205",
+            "BookingChannel": "Online",
+            "ProcessedByStaffID": null,
+            "CheckInDate": "2026-09-25",
+            "CheckOutDate": "2026-09-27",
+            "NumAdults": 2,
+            "NumChildrenUnder1m": 0,
+            "NumChildrenOver1m": 0,
+            "VoucherCode": "SUMMER10",
+            "DiscountAmount": 300000,
+            "TotalPrice": 3000000,
+            "DepositPercent": 20,
+            "DepositAmount": 600000,
+            "RemainingAmount": 2100000,
+            "Notes": "Cần phòng tầng cao, view thành phố",
+            "Status": "Deposited"
+        },
+
+        {"":"Hóa đơn tổng"},
+        {
+            "PK": "BOOKING#BK1002",
+            "SK": "PAYMENT#P0002",
+            "PaymentType": "Deposit",
+            "Amount": 600000,
+            "PaymentMethod": "Transfer",
+            "PaymentStatus": "Paid",
+            "PaidAt": "2026-09-06T14:30:00Z"
+        }
+    ]
+}
