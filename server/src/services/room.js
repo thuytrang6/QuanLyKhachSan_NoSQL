@@ -9,14 +9,27 @@ const { clean } = require("../utils/clean");
 const ROOM_STATUSES = ["Available", "Occupied", "Cleaning", "Maintenance", "OutOfOrder"];
 const VERSION_MSG = "Dữ liệu đã bị người khác sửa, tải lại";
 
-async function listRooms({ floor, roomTypeId, status } = {}) {
+// Danh sách phòng cho admin: AP3 lấy toàn bộ phòng (1 item collection nhỏ), lọc rồi chia trang ở server.
+// Không dùng Limit + LastEvaluatedKey vì bộ lọc tầng/loại/trạng thái chạy sau Limit -> các trang sẽ lệch số dòng
+// và không biết tổng số trang.
+async function listRooms({ floor, roomTypeId, status, page = 1, pageSize = 10 } = {}) {
   const rooms = await roomRepo.listRooms();
-  return rooms
+  const filtered = rooms
     .filter((r) => (floor == null || r.Floor === floor)
       && (!roomTypeId || r.RoomTypeID === roomTypeId)
       && (!status || r.Status === status))
-    .map(clean)
     .sort((a, b) => a.Floor - b.Floor || a.RoomID.localeCompare(b.RoomID, undefined, { numeric: true }));
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const current = Math.min(page, totalPages); // trang vượt quá (vd. vừa xóa phòng cuối trang) -> về trang cuối
+  return {
+    items: filtered.slice((current - 1) * pageSize, current * pageSize).map(clean),
+    total,
+    page: current,
+    pageSize,
+    totalPages,
+    floors: [...new Set(rooms.map((r) => r.Floor))].sort((a, b) => a - b), // cho dropdown lọc tầng
+  };
 }
 
 async function getRoom(roomId) {
@@ -146,8 +159,8 @@ async function listRoomTypes() {
 async function hotelInfo() {
   const h = await hotelRepo.getHotel();
   if (!h) throw notFound("Chưa có dữ liệu khách sạn, hãy chạy npm run seed");
-  const { HotelName, Address, City, Phone, Email, StarRating, CheckInTime, CheckOutTime, Policies, Amenities } = h;
-  return { HotelName, Address, City, Phone, Email, StarRating, CheckInTime, CheckOutTime, Policies, Amenities };
+  const { HotelName, Address, City, Phone, Email, StarRating, CheckInTime, CheckOutTime, Policies, Amenities, RatingAvg, ReviewCount, TotalRooms } = h;
+  return { HotelName, Address, City, Phone, Email, StarRating, CheckInTime, CheckOutTime, Policies, Amenities, RatingAvg, ReviewCount, TotalRooms };
 }
 
 module.exports = { hotelInfo, ROOM_STATUSES, listRooms, getRoom, createRoom, updateRoom, deleteRoom, listLogs, statusBoard, listRoomTypes };

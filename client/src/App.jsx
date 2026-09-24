@@ -1,11 +1,12 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
-import ProtectedRoute, { homeOf } from "./components/ProtectedRoute";
+import ProtectedRoute from "./components/ProtectedRoute";
 import { PageSkeleton } from "./components/Skeleton";
 import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import RoomsPage from "./pages/RoomsPage";
+import HomePage from "./pages/HomePage";
+import RoomDetailPage from "./pages/RoomDetailPage";
 import PaymentPage from "./pages/PaymentPage";
 import MyBookingsPage from "./pages/MyBookingsPage";
 import BookingDetailPage from "./pages/BookingDetailPage";
@@ -17,7 +18,9 @@ import { ForbiddenPage, NotFoundPage } from "./pages/ErrorPages";
 function Home() {
   const { user, loading } = useAuth();
   if (loading) return <PageSkeleton />;
-  return <Navigate to={homeOf(user)} replace />;
+  // Trang chủ công khai cho khách; admin về dashboard quản lý
+  if (user && user.role === "admin") return <Navigate to="/admin" replace />;
+  return <HomePage />;
 }
 
 const customer = (el) => <ProtectedRoute role="customer">{el}</ProtectedRoute>;
@@ -31,7 +34,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        <Route path="/rooms" element={customer(<RoomsPage />)} />
+        <Route path="/rooms" element={<Navigate to="/" replace />} />
+        <Route path="/rooms/:id" element={<RoomDetailPage />} />
         <Route path="/booking/:id/pay" element={customer(<PaymentPage />)} />
         <Route path="/my-bookings" element={customer(<MyBookingsPage />)} />
         <Route path="/my-bookings/:id" element={customer(<BookingDetailPage />)} />

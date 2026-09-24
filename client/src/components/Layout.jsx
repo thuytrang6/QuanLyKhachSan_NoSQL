@@ -3,8 +3,9 @@ import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { useHotel } from "../hooks/useRoomTypes";
 
+const GUEST_LINKS = [{ to: "/", label: "Trang chủ", end: true }];
 const CUSTOMER_LINKS = [
-  { to: "/rooms", label: "Tìm phòng" },
+  { to: "/", label: "Trang chủ", end: true },
   { to: "/my-bookings", label: "Đơn của tôi" },
 ];
 const ADMIN_LINKS = [
@@ -16,12 +17,17 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const hotel = useHotel();
   const navigate = useNavigate();
-  const links = !user ? [] : user.role === "admin" ? ADMIN_LINKS : CUSTOMER_LINKS;
+  const links = !user ? GUEST_LINKS : user.role === "admin" ? ADMIN_LINKS : CUSTOMER_LINKS;
 
   const onLogout = async () => {
-    await logout();
+    try {
+      await logout();
+    } catch (e) {
+      toast.error(e.message || "Đăng xuất thất bại, vui lòng thử lại");
+      return;
+    }
     toast.success("Đã đăng xuất");
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   return (

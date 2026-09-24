@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { adminApi } from "../../api/admin";
 import { useRoomTypes } from "../../hooks/useRoomTypes";
@@ -14,6 +14,7 @@ import { TableSkeleton } from "../../components/Skeleton";
 import EmptyState, { ErrorState } from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import Field from "../../components/Field";
+import Pagination from "../../components/Pagination";
 
 // Sau mọi thao tác ghi: làm mới danh sách phòng, sơ đồ trạng thái và kết quả tìm phòng
 function useInvalidateRooms() {
@@ -33,13 +34,21 @@ export default function RoomsAdminPage() {
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(null);
-  const params = useMemo(() => Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== "")), [filters]);
-  const rooms = useQuery({ queryKey: ["admin", "rooms", params], queryFn: () => adminApi.rooms(params) });
-  // Danh sách tầng lấy từ phòng thực tế trong DB (query không lọc)
-  const allRooms = useQuery({ queryKey: ["admin", "rooms", {}], queryFn: () => adminApi.rooms({}) });
-  const floors = [...new Set((allRooms.data || []).map((r) => r.Floor))].sort((a, b) => a - b);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const params = useMemo(() => ({
+    ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== "")), page, pageSize,
+  }), [filters, page, pageSize]);
+  // Server lọc + chia trang, trả { items, total, page, pageSize, totalPages, floors }
+  const rooms = useQuery({ queryKey: ["admin", "rooms", params], queryFn: () => adminApi.rooms(params), placeholderData: keepPreviousData });
+  const data = rooms.data;
+  const floors = data ? data.floors : [];
+  // Server lùi về trang cuối khi trang đang xem không còn phòng (vd. vừa xóa phòng cuối) -> đồng bộ lại
+  useEffect(() => { if (data && !rooms.isPlaceholderData && data.page !== page) setPage(data.page); }, [data, page, rooms.isPlaceholderData]);
 
-  const set = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }));
+  // Đổi bộ lọc hoặc số dòng/trang -> quay về trang 1
+  const set = (k) => (e) => { setFilters((f) => ({ ...f, [k]: e.target.value })); setPage(1); };
+  const clearFilters = () => { setFilters({ floor: "", roomTypeId: "", status: "" }); setPage(1); };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -71,14 +80,15 @@ export default function RoomsAdminPage() {
           </select>
         </Field>
         <div className="flex items-end">
-          <button className="btn-ghost" onClick={() => setFilters({ floor: "", roomTypeId: "", status: "" })}>Xóa bộ lọc</button>
+          <button className="btn-ghost" onClick={clearFilters}>Xóa bộ lọc</button>
         </div>
       </div>
 
       <div className="card mt-5 overflow-x-auto">
         {rooms.isLoading ? <TableSkeleton cols={7} rows={10} /> : rooms.isError ? <div className="p-4"><ErrorState error={rooms.error} onRetry={rooms.refetch} /></div> :
-          rooms.data.length === 0 ? <div className="p-4"><EmptyState icon="🏨" title="Không có phòng phù hợp bộ lọc" /></div> : (
-            <table className="min-w-full divide-y divide-slate-100">
+          data.total === 0 ? <div className="p-4"><EmptyState icon="🏨" title="Không có phòng phù hợp bộ lọc" /></div> : (
+            <>
+            <table className={`min-w-full divide-y divide-slate-100 ${rooms.isPlaceholderData ? "opacity-60" : ""}`}>
               <thead className="bg-slate-50">
                 <tr>
                   <th className="th">Phòng</th><th className="th">Loại</th><th className="th">View</th><th className="th text-right">Giá gốc</th>
@@ -86,7 +96,7 @@ export default function RoomsAdminPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rooms.data.map((r) => (
+                {data.items.map((r) => (
                   <tr key={r.RoomID} className="hover:bg-slate-50">
                     <td className="td"><div className="font-semibold">{r.RoomNumber}</div><div className="text-xs text-slate-500">Tầng {r.Floor} · v{r.Version}</div></td>
                     <td className="td">{r.RoomTypeName}<div className="text-xs text-slate-500">{r.BedType} · {r.AreaM2} m² · ≤{r.Capacity} khách</div></td>
@@ -107,6 +117,14 @@ export default function RoomsAdminPage() {
                 ))}
               </tbody>
             </table>
+            <Pagination
+              page={data.page} pageSize={data.pageSize} total={data.total} totalPages={data.totalPages} unit="phòng"
+              busy={rooms.isFetching}
+              onPage={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              onPageSize={(s) => { setPageSize(s); setPage(1); }}
+              sizes={[5, 10, 20, 50]}
+            />
+            </>
           )}
       </div>
 

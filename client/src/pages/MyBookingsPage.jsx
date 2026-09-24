@@ -17,7 +17,7 @@ export default function MyBookingsPage() {
         {list.isLoading && <div className="card"><TableSkeleton cols={6} /></div>}
         {list.isError && <ErrorState error={list.error} onRetry={list.refetch} />}
         {list.data && list.data.length === 0 && (
-          <EmptyState icon="🧳" title="Bạn chưa có đơn đặt phòng nào" action={<Link to="/rooms" className="btn-primary">Tìm phòng</Link>} />
+          <EmptyState icon="🧳" title="Bạn chưa có đơn đặt phòng nào" action={<Link to="/" className="btn-primary">Tìm phòng</Link>} />
         )}
         {list.data && list.data.length > 0 && (
           <div className="card overflow-x-auto">

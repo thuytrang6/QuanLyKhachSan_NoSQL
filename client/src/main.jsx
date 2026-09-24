@@ -22,7 +22,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <BrowserRouter>
         <AuthProvider>
           <App />
-          <Toaster position="top-right" toastOptions={{ duration: 4000, style: { fontSize: "14px" } }} />
+          {/* top: 72 -> thông báo nằm dưới thanh menu, không che nút Đăng xuất / tài khoản */}
+          <Toaster position="top-right" containerStyle={{ top: 72 }} toastOptions={{ duration: 4000, style: { fontSize: "14px" } }} />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

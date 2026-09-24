@@ -21,8 +21,11 @@ export function AuthProvider({ children }) {
     setUser: (u) => qc.setQueryData(["auth", "me"], u),
     logout: async () => {
       await authApi.logout();
-      qc.clear();
+      // Đặt user = null trên CHÍNH query đang được theo dõi (không dùng qc.clear(): nó xóa query này
+      // khỏi cache nên giao diện vẫn giữ user cũ), rồi mới bỏ dữ liệu riêng của tài khoản vừa đăng xuất.
+      await qc.cancelQueries();
       qc.setQueryData(["auth", "me"], null);
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "auth" });
     },
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

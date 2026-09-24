@@ -7,9 +7,16 @@ export default function ProtectedRoute({ role, children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) return <PageSkeleton />;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   if (role && user.role !== role) return <Navigate to="/403" replace />;
   return children;
 }
 
-export const homeOf = (user) => (!user ? "/login" : user.role === "admin" ? "/admin" : "/rooms");
+export const homeOf = (user) => (!user ? "/" : user.role === "admin" ? "/admin" : "/");
+
+// Sau đăng nhập/đăng ký: quay lại trang đang xem (vd. chi tiết phòng) nếu đúng quyền, ngược lại về trang chính
+export function afterAuthPath(user, from) {
+  const allowed = from && from !== "/login" && from !== "/register"
+    && (user.role === "admin" ? from.startsWith("/admin") : !from.startsWith("/admin"));
+  return allowed ? from : homeOf(user);
+}

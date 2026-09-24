@@ -1,4 +1,5 @@
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -7,11 +8,14 @@ import { authApi } from "../api/auth";
 import { useAuth } from "../context/AuthContext";
 import { registerSchema } from "../validation/schemas";
 import Field from "../components/Field";
-import { homeOf } from "../components/ProtectedRoute";
+import { afterAuthPath } from "../components/ProtectedRoute";
+import AlreadySignedIn from "../components/AlreadySignedIn";
 
 export default function RegisterPage() {
   const { user, setUser } = useAuth();
-  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state && location.state.from;
+  const [justSignedIn, setJustSignedIn] = useState(false);
   const { register, handleSubmit, setError, formState: { errors } } = useForm({
     resolver: zodResolver(registerSchema),
     defaultValues: { idType: "CCCD" },
@@ -20,9 +24,9 @@ export default function RegisterPage() {
   const signup = useMutation({
     mutationFn: ({ confirmPassword, ...body }) => authApi.register(body),
     onSuccess: (u) => {
+      setJustSignedIn(true);
       setUser(u);
       toast.success(`Tạo tài khoản ${u.CustomerID} thành công`);
-      navigate("/rooms", { replace: true });
     },
     onError: (e) => {
       if (e.status === 409) setError("email", { message: e.message });
@@ -30,7 +34,9 @@ export default function RegisterPage() {
     },
   });
 
-  if (user) return <Navigate to={homeOf(user)} replace />;
+  // setUser làm trang render lại -> chuyển hướng tại đây (quay lại trang đang xem trước khi đăng nhập)
+  if (user && justSignedIn) return <Navigate to={afterAuthPath(user, from)} replace />;
+  if (user) return <AlreadySignedIn from={from} />;
 
   return (
     <div className="mx-auto max-w-xl px-4 py-12">

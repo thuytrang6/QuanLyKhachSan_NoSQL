@@ -1,6 +1,7 @@
 // seed.js — tạo bảng HotelBookingTable (3 GSI, On-demand, Streams, TTL) và nạp dữ liệu mẫu (docx mục 10.2).
-//   DynamoDB Local:  DDB_ENDPOINT=http://localhost:8000 AWS_REGION=local node seed.js
-//   AWS thật:        AWS_REGION=ap-southeast-1 node seed.js
+//   npm run seed         nạp lại dữ liệu mẫu, GIỮ NGUYÊN dữ liệu tạo thêm (tài khoản đăng ký, đơn đặt phòng, phòng mới...)
+//   npm run seed:reset   xóa bảng và tạo lại từ đầu (chỉ DynamoDB Local) -> mất mọi dữ liệu tạo thêm
+//   AWS thật:            AWS_REGION=ap-southeast-1 node seed.js
 // Nếu không đặt biến môi trường, script đọc server/.env.
 const fs = require("fs");
 const path = require("path");
@@ -8,10 +9,11 @@ const readline = require("readline");
 require("dotenv").config({ path: path.join(__dirname, "server", ".env") });
 const {
   DynamoDBClient, CreateTableCommand, DescribeTableCommand, DeleteTableCommand,
-  UpdateTimeToLiveCommand, BatchWriteItemCommand, waitUntilTableExists, waitUntilTableNotExists,
+  UpdateTimeToLiveCommand, BatchWriteItemCommand, UpdateItemCommand, waitUntilTableExists, waitUntilTableNotExists,
 } = require("@aws-sdk/client-dynamodb");
 
 const TABLE = process.env.TABLE || "HotelBookingTable";
+const RESET = process.argv.includes("--reset");
 const DATA_FILE = path.join(__dirname, "Database", "HotelBookingTable.json");
 const endpoint = process.env.DDB_ENDPOINT;
 const client = new DynamoDBClient({
@@ -72,14 +74,29 @@ async function readItems() {
     if ((isDemoBooking || isDemoNight) && item.ExpiresAt) item.ExpiresAt = { N: String(exp) };
     items.push(item);
   }
-  const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  for (const [name, seq] of Object.entries(maxSeq)) {
-    items.push({
-      PK: { S: "COUNTER" }, SK: { S: name }, EntityType: { S: "Counter" },
-      Seq: { N: String(seq) }, CreatedAt: { S: now }, UpdatedAt: { S: now },
-    });
-  }
   return { items, maxSeq };
+}
+
+// COUNTER: chỉ nâng Seq lên mức lớn nhất của dữ liệu mẫu, không bao giờ hạ xuống.
+// Nhờ vậy seed lại không làm trùng mã với tài khoản/đơn đã tạo thêm (C0321, BK002317...).
+async function upsertCounters(maxSeq) {
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const result = {};
+  for (const [name, seq] of Object.entries(maxSeq)) {
+    try {
+      await client.send(new UpdateItemCommand({
+        TableName: TABLE, Key: { PK: { S: "COUNTER" }, SK: { S: name } },
+        UpdateExpression: "SET Seq = :v, EntityType = :e, UpdatedAt = :t, CreatedAt = if_not_exists(CreatedAt, :t)",
+        ConditionExpression: "attribute_not_exists(Seq) OR Seq < :v",
+        ExpressionAttributeValues: { ":v": { N: String(seq) }, ":e": { S: "Counter" }, ":t": { S: now } },
+      }));
+      result[name] = seq;
+    } catch (e) {
+      if (e.name !== "ConditionalCheckFailedException") throw e;
+      result[name] = "giữ nguyên";
+    }
+  }
+  return result;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -117,13 +134,17 @@ async function main() {
   acquireLock();
   console.log(`Bảng: ${TABLE} @ ${endpoint || "AWS " + (process.env.AWS_REGION || "ap-southeast-1")}`);
   if (await tableExists()) {
-    if (endpoint) {
-      console.log("Bảng đã tồn tại trên DynamoDB Local -> xóa và tạo lại để dữ liệu sạch.");
+    if (RESET) {
+      if (!endpoint) {
+        console.error("--reset chỉ dùng cho DynamoDB Local. Trên AWS hãy xóa bảng thủ công nếu thật sự muốn.");
+        process.exit(1);
+      }
+      console.log("--reset: xóa bảng và tạo lại từ đầu (mất mọi dữ liệu tạo thêm).");
       await client.send(new DeleteTableCommand({ TableName: TABLE }));
       await waitUntilTableNotExists({ client, maxWaitTime: 120 }, { TableName: TABLE });
       await createTable();
     } else {
-      console.log("Bảng đã tồn tại trên AWS -> ghi đè item.");
+      console.log("Bảng đã có -> nạp lại dữ liệu mẫu, GIỮ NGUYÊN tài khoản / đơn đặt phòng / phòng tạo thêm.");
     }
   } else {
     console.log("Tạo bảng (3 GSI, On-demand, Streams, TTL ExpiresAt)...");
@@ -131,7 +152,7 @@ async function main() {
   }
 
   const { items, maxSeq } = await readItems();
-  console.log(`Đọc ${items.length} item (gồm ${Object.keys(maxSeq).length} COUNTER: ${JSON.stringify(maxSeq)}).`);
+  console.log(`Đọc ${items.length} item dữ liệu mẫu.`);
 
   const batches = [];
   for (let i = 0; i < items.length; i += 25) batches.push(items.slice(i, i + 25));
@@ -145,7 +166,8 @@ async function main() {
     }
   };
   await Promise.all(Array.from({ length: 8 }, worker));
-  console.log(`\nXong. ${TTL_DEMO_BOOKING} giữ chỗ tới ${new Date(Date.now() + 15 * 60e3).toISOString()}.`);
+  console.log(`\n  COUNTER: ${JSON.stringify(await upsertCounters(maxSeq))}`);
+  console.log(`Xong. ${TTL_DEMO_BOOKING} giữ chỗ tới ${new Date(Date.now() + 15 * 60e3).toISOString()}.`);
 }
 
 main().catch((e) => { console.error("Seed thất bại:", e); process.exit(1); });

@@ -51,21 +51,94 @@ async function searchRooms(q) {
 
   const typeIds = [...new Set(candidates.map((r) => r.RoomTypeID))];
   const priceData = await pricing.loadPricingData(typeIds);
-  const result = candidates
+  const priced = candidates
     .filter((r) => priceData[r.RoomTypeID])
     .map((r) => {
       const { roomType, rates } = priceData[r.RoomTypeID];
       const nightlyRates = pricing.priceNights(roomType, rates, nights);
+      const prices = nightlyRates.map((n) => n.Price);
       return {
         ...clean(r),
         RoomTypeDescription: roomType.Description,
         NightlyRates: nightlyRates,
         Nights: nights.length,
-        SubTotal: nightlyRates.reduce((s, n) => s + n.Price, 0),
+        SubTotal: prices.reduce((s, p) => s + p, 0),
+        MinNightPrice: Math.min(...prices),
+        MaxNightPrice: Math.max(...prices),
       };
-    })
-    .sort((a, b) => a.SubTotal - b.SubTotal || a.RoomID.localeCompare(b.RoomID));
+    });
+  // Lọc theo giá tối đa mỗi đêm và sắp xếp ở server (frontend không tự lọc/tính giá)
+  const byRoom = (a, b) => a.RoomID.localeCompare(b.RoomID, undefined, { numeric: true });
+  const SORTS = {
+    price_asc: (a, b) => a.SubTotal - b.SubTotal || byRoom(a, b),
+    price_desc: (a, b) => b.SubTotal - a.SubTotal || byRoom(a, b),
+    floor: (a, b) => a.Floor - b.Floor || byRoom(a, b),
+  };
+  const result = priced
+    .filter((r) => !q.maxPrice || r.MaxNightPrice <= q.maxPrice)
+    .sort(SORTS[q.sort || "price_asc"]);
   return { rooms: result, nights: nights.length, checkedAt: isoNow() };
+}
+
+const monthStart = (ymd) => ymd.slice(0, 8) + "01";
+// Ngày cuối của tháng kế tiếp: "2026-09-xx" -> "2026-10-31"
+function endOfNextMonth(ymd) {
+  const [y, m] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
+}
+
+// Chi tiết 1 phòng: AP3 (GetItem Room) + AP2 (RoomType) + AP6 (lịch đêm 2 tháng) [+ AP6/AP25 giá & tình trạng cho ngày đã chọn]
+async function roomDetail(roomId, q) {
+  const room = await roomRepo.getRoom(roomId);
+  if (!room) throw notFound(`Không tìm thấy phòng ${roomId}`);
+  const today = vnDate();
+  const anchor = q.checkIn && q.checkIn > today ? q.checkIn : today;
+  const calFrom = monthStart(anchor), calTo = endOfNextMonth(anchor);
+  const nowSec = epochSec();
+
+  const [roomType, calendarNights] = await Promise.all([
+    hotelRepo.getRoomType(room.RoomTypeID),
+    roomRepo.roomNightsBetween(roomId, calFrom, calTo),
+  ]);
+  // Chỉ trả ngày bị chiếm, không lộ BookingID của khách khác
+  const takenDates = calendarNights.filter((n) => isTaken(n, nowSec)).map((n) => n.Date);
+
+  let stay = null;
+  if (q.checkIn && q.checkOut) {
+    try {
+      const nights = validateStay(q);
+      const [stayNights, priceData] = await Promise.all([
+        roomRepo.roomNightsBetween(roomId, nights[0], nights[nights.length - 1]),
+        pricing.loadPricingData([room.RoomTypeID]),
+      ]);
+      const { rates } = priceData[room.RoomTypeID] || { rates: [] };
+      const nightlyRates = roomType ? pricing.priceNights(roomType, rates, nights) : [];
+      const conflicts = stayNights.filter((n) => isTaken(n, nowSec)).map((n) => n.Date);
+      const reasons = [];
+      if (UNAVAILABLE_ROOM_STATUSES.includes(room.Status)) reasons.push("Phòng đang tạm ngừng nhận khách (bảo trì hoặc ngừng khai thác)");
+      if (conflicts.length) reasons.push(`Phòng đã có khách đặt ${conflicts.length} đêm trong khoảng này`);
+      if (q.adults + q.childrenOver1m > room.Capacity) reasons.push(`Phòng chỉ chứa tối đa ${room.Capacity} khách (người lớn + trẻ trên 1m)`);
+      stay = {
+        CheckInDate: q.checkIn, CheckOutDate: q.checkOut, Nights: nights.length,
+        NightlyRates: nightlyRates, SubTotal: nightlyRates.reduce((s, n) => s + n.Price, 0),
+        ConflictDates: conflicts, Available: reasons.length === 0, Reasons: reasons,
+      };
+    } catch (e) {
+      if (e.status !== 400) throw e;
+      stay = { error: e.message };
+    }
+  }
+
+  return {
+    room: {
+      ...clean(room),
+      RoomTypeDescription: roomType && roomType.Description,
+      MaxExtraBed: roomType && roomType.MaxExtraBed,
+      RoomTypeImages: roomType && roomType.Images,
+    },
+    calendar: { from: calFrom, to: calTo, today, takenDates },
+    stay,
+  };
 }
 
 // Tính giá đầy đủ cho 1 phòng (dùng cho báo giá và khi tạo booking) — docx 7.1 + 7.2
@@ -256,4 +329,4 @@ async function cancelBooking(user, bookingId, reason) {
   return { BookingID: bookingId, Status: "Cancelled", RefundAmount: refund ? refund.Amount : 0 };
 }
 
-module.exports = { searchRooms, quote, createBooking, getBookingDetail, listMyBookings, payDeposit, cancelBooking };
+module.exports = { searchRooms, roomDetail, quote, createBooking, getBookingDetail, listMyBookings, payDeposit, cancelBooking };

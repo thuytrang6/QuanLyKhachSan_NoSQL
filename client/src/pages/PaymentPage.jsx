@@ -58,7 +58,7 @@ function PaymentView({ booking, serverTime }) {
           {expired ? (
             <div className="space-y-3 pt-2">
               <p className="rounded-lg bg-slate-50 p-3 text-slate-600">Đơn đã quá hạn thanh toán cọc, phòng đã được mở bán lại. Vui lòng tìm và đặt lại.</p>
-              <Link to="/rooms" className="btn-primary w-full">Tìm phòng khác</Link>
+              <Link to="/" className="btn-primary w-full">Tìm phòng khác</Link>
             </div>
           ) : (
             <button className="btn w-full bg-[#005baa] py-3 text-base text-white hover:bg-[#004a8c]" onClick={() => pay.mutate()} disabled={pay.isPending}>

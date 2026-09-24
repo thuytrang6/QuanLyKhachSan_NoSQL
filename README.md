@@ -24,18 +24,20 @@ Web app Node.js + React cho đồ án môn Dữ liệu NoSQL. Toàn bộ dữ li
 Yêu cầu: Node.js 18+, Docker.
 
 ```bash
-# 1. DynamoDB Local
-docker run -d --name dynamodb-local -p 8000:8000 amazon/dynamodb-local
-#    (hoặc: npm run ddb:local)
+# 1. DynamoDB Local LƯU ĐĨA vào Docker volume, cổng 8001 (khớp DDB_ENDPOINT trong server/.env)
+#    Dữ liệu (tài khoản đăng ký, đơn đặt phòng...) còn nguyên khi tắt Docker / khởi động lại máy.
+#    Container tự chạy lại cùng Docker (--restart unless-stopped). Chỉ cần tạo 1 lần:
+npm run ddb:local
+#    (tương đương: docker run -d --name dynamodb-local-data -p 8001:8000
+#       -v hotel-dynamodb-data:/home/dynamodblocal/data --restart unless-stopped
+#       amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb -dbPath ./data)
 
 # 2. Cài thư viện (npm workspaces: 1 lệnh cài cho cả server và client,
 #    chỉ có 1 package-lock.json và 1 node_modules ở thư mục gốc)
 npm install
 
-# 3. Tạo bảng + nạp dữ liệu mẫu (đọc cấu hình trong server/.env)
+# 3. Tạo bảng + nạp dữ liệu mẫu (đọc cấu hình trong server/.env) — chỉ cần chạy lần đầu, khoảng 3-4 phút
 npm run seed
-
-
 
 # 4. Chạy API + web song song
 npm run dev
@@ -44,19 +46,22 @@ npm run dev
 Mở http://localhost:5173.
 
 - `server/.env` đã có sẵn cấu hình cho DynamoDB Local (xem `server/.env.example`). Muốn dùng AWS thật: xóa `DDB_ENDPOINT`, đặt `AWS_REGION=ap-southeast-1` và cấu hình credentials.
-- `npm run seed` trên DynamoDB Local sẽ **xóa bảng cũ và tạo lại** để dữ liệu sạch. Chạy lại seed bất cứ lúc nào muốn trả dữ liệu về trạng thái ban đầu.
-- Seed đặt lại `ExpiresAt` của đơn Pending **BK002314** = lúc nạp + 15 phút (demo TTL), và tạo 4 item `PK=COUNTER` (CUSTOMER, BOOKING, PAYMENT, LOG) có `Seq` = mã lớn nhất trong dữ liệu mẫu, nên mã tiếp theo là C0321, BK002317, P004206, L000581.
-- Container chạy mặc định ở chế độ in-memory: seed nhanh hơn nhưng **mất dữ liệu khi container dừng**. Nếu chạy với `-sharedDb -dbPath ...` để lưu xuống đĩa thì seed mất khoảng 10 phút trên Docker Desktop Windows.
+- **`npm run seed`**: tạo bảng nếu chưa có rồi nạp dữ liệu mẫu. Nếu bảng đã có, seed **không xóa gì**: chỉ ghi đè các item mẫu về trạng thái ban đầu, **giữ nguyên** tài khoản đăng ký, đơn đặt phòng, phòng tạo thêm.
+- **`npm run seed:reset`**: xóa bảng và tạo lại từ đầu (chỉ DynamoDB Local). **Mất mọi dữ liệu tạo thêm**, chỉ dùng khi thật sự muốn làm sạch.
+- Seed đặt lại `ExpiresAt` của đơn Pending **BK002314** = lúc nạp + 15 phút (demo TTL). 4 item `PK=COUNTER` (CUSTOMER, BOOKING, PAYMENT, LOG) được nâng lên mã lớn nhất của dữ liệu mẫu nhưng **không bao giờ bị hạ xuống**, nên seed lại không làm trùng mã đã cấp (lần đầu, mã tiếp theo là C0321, BK002317, P004206, L000581).
+- Dùng Docker **volume** (`hotel-dynamodb-data`), không lưu vào thư mục bên trong container: vừa giữ được dữ liệu, vừa ghi nhanh hơn nhiều. Xóa hẳn dữ liệu: `docker rm -f dynamodb-local-data && docker volume rm hotel-dynamodb-data`.
+- Nếu dùng Git Bash để chạy `docker run`, đường dẫn `/home/...` bị tự đổi thành `C:/Program Files/Git/...`, nên lệnh ở trên dùng `-dbPath ./data`. PowerShell và CMD không bị lỗi này.
 - Ảnh phòng lấy theo đường dẫn trong DB (`images/rooms/std-1.jpg`...). Đặt file ảnh vào `client/public/images/rooms/`. Nếu chưa có file ảnh, giao diện hiện khung thay thế.
 
 ## Xử lý sự cố
 
 | Hiện tượng | Nguyên nhân / cách xử lý |
 |---|---|
-| Đăng nhập báo "Không kết nối được máy chủ", `/api/health` vẫn ok | DynamoDB Local không phản hồi. Đợi seed chạy xong (container lưu đĩa bị chậm khi seed). Nếu vẫn treo: `docker restart dynamodb-local` rồi `npm run seed` lại. |
+| Đăng nhập báo "Không kết nối được máy chủ", `/api/health` vẫn ok | DynamoDB Local không phản hồi hoặc chưa chạy. Mở Docker Desktop, kiểm tra `docker ps` có `dynamodb-local-data`; nếu treo thì `docker restart dynamodb-local-data` (dữ liệu vẫn còn). |
 | Seed báo "Đang có một lệnh seed khác chạy" | Chỉ chạy **một** lệnh seed mỗi lần, vì 2 lệnh ghi chồng sẽ làm kẹt khóa database. Đợi lệnh kia in `Xong.` |
 | `npm run dev` báo `EADDRINUSE :4000`, hoặc Vite chạy ở cổng 5174 | Còn một bản dev cũ đang chạy. Tắt nó đi (Ctrl+C ở terminal cũ) rồi chạy lại. |
-| Dashboard thiếu số liệu, đăng nhập sai dù đúng mật khẩu | Seed chưa xong hoặc bị ngắt giữa chừng. Chạy lại `npm run seed` và đợi dòng `Xong.` |
+| Dashboard thiếu số liệu, đăng nhập sai dù đúng mật khẩu | Seed chưa xong hoặc bị ngắt giữa chừng. Chạy lại `npm run seed` (không mất tài khoản đã đăng ký) và đợi dòng `Xong.` |
+| Xem dữ liệu bằng giao diện web (dynamodb-admin) | Trỏ tới cổng 8001: `docker run -d --name dynamodb-admin -p 8003:8001 -e DYNAMO_ENDPOINT=http://host.docker.internal:8001 aaronshaf/dynamodb-admin`, mở http://localhost:8003 |
 
 ## Tài khoản test (mật khẩu `123456`)
 
@@ -79,7 +84,8 @@ Dữ liệu mẫu lấy mốc **24/09/2026**. Trên dashboard có nút **"Dùng 
 | Đăng ký | `POST /api/auth/register` | GetItem `UNIQUE#EMAIL#<email>` (kiểm tra trước) → UpdateItem `COUNTER/CUSTOMER` ADD Seq → TransactWrite Put Customer + Put UniqueEmail `attribute_not_exists(PK)` | 12 |
 | Thông tin khách sạn (header) | `GET /api/hotel` | GetItem `HOTEL#MAIN / METADATA` | 1 |
 | Danh sách loại phòng | `GET /api/rooms/types` | Query `HOTEL#MAIN`, begins_with `ROOMTYPE#` | 2 |
-| Tìm phòng trống | `GET /api/rooms/search` | Query `HOTEL#MAIN` begins_with `ROOM#` + mỗi đêm Query GSI1 `NIGHT#<date>` begins_with `ROOMTYPE#<type>` (Booked, hoặc Held còn hạn) | 3, 5 |
+| Trang chủ: tìm phòng trống, lọc giá tối đa/đêm, sắp xếp (công khai, không cần đăng nhập) | `GET /api/rooms/search` | Query `HOTEL#MAIN` begins_with `ROOM#` + mỗi đêm Query GSI1 `NIGHT#<date>` begins_with `ROOMTYPE#<type>` (Booked, hoặc Held còn hạn) + Query `RATE#<type>#`; lọc `maxPrice` và `sort` ở server | 3, 5, 25 |
+| Chi tiết phòng + lịch còn trống 2 tháng (công khai) | `GET /api/rooms/:id` | GetItem Room + GetItem RoomType + Query `ROOM#<id>` SK BETWEEN `NIGHT#<đầu tháng>` AND `NIGHT#<cuối tháng sau>`; nếu có ngày: Query `ROOM#<id>` SK BETWEEN cho khoảng lưu trú + giá theo `RATE#` | 2, 3, 6, 25 |
 | Tính giá, báo giá | `POST /api/bookings/quote` | GetItem Room; Query `ROOMTYPE#`; Query `RATE#<type>#`; GetItem `VOUCHER#<code>`; GetItem Hotel (Policies) | 1, 2, 3, 25, 27 |
 | Đặt phòng (Pending, giữ 15 phút) | `POST /api/bookings` | Query `ROOM#<id>` SK BETWEEN (kiểm tra sớm) → TransactWrite: Put Booking + ConditionCheck Room + Put RoomNight Held `attribute_not_exists(PK) OR (Status=Held AND ExpiresAt<now)` + Update Voucher `ADD UsedCount 1` (IsActive AND UsedCount<UsageLimit) | 6, 7 |
 | Thanh toán cọc (VNPay demo) | `POST /api/bookings/:id/pay` | Query `BOOKING#<id>` → TransactWrite: Put Payment Deposit + Update Booking Pending→Confirmed (Status=Pending AND ExpiresAt>now, REMOVE ExpiresAt, ADD Version) + Update RoomNight Held→Booked | 7, 8 |
@@ -92,7 +98,7 @@ Dữ liệu mẫu lấy mốc **24/09/2026**. Trên dashboard có nút **"Dùng 
 | Công suất phòng theo ngày | `GET /api/admin/reports/occupancy` | Query GSI1 `NIGHT#<date>` filter Booked, Select=COUNT / Query `ROOM#` Select=COUNT | 3, 5 |
 | Khách đến hôm nay, khách đang ở, đánh giá | `GET /api/admin/reports/overview` | GSI3 `BKSTATUS#Confirmed` begins_with `CHECKIN#<date>`; GSI3 `BKSTATUS#CheckedIn`; GetItem Hotel; Query `REVIEW#` desc Limit 10 | 1, 14, 15, 28 |
 | Sơ đồ trạng thái phòng (refetch 5 giây) | `GET /api/admin/room-board` | Query GSI3 `ROOMSTATUS#<status>` × 5 | 4 |
-| Danh sách phòng + lọc | `GET /api/admin/rooms` | Query `HOTEL#MAIN` begins_with `ROOM#` | 3 |
+| Danh sách phòng + lọc + phân trang | `GET /api/admin/rooms?page=&pageSize=` | Query `HOTEL#MAIN` begins_with `ROOM#` (có phân trang LastEvaluatedKey), lọc tầng/loại/trạng thái rồi chia trang ở server; trả `{ items, total, page, pageSize, totalPages, floors }` | 3 |
 | Tạo phòng | `POST /api/admin/rooms` | GetItem RoomType → TransactWrite Put Room `attribute_not_exists(PK)` (GSI3 `ROOMSTATUS#Available`, Version 1) + Hotel `ADD TotalRooms 1` | 2, 3 |
 | Sửa phòng / đổi trạng thái | `PUT /api/admin/rooms/:id` | TransactWrite Update Room (Version khớp, không Occupied; SET Status, GSI3PK, UpdatedAt, ADD Version) + Put RoomStatusLog | 3, 4, 22 |
 | Xóa phòng | `DELETE /api/admin/rooms/:id` | Query GSI1 `ROOM#<id>` begins_with `CHECKIN#` Limit 1 + Query `ROOM#<id>` begins_with `NIGHT#` Limit 1 → TransactWrite Delete Room + log + Hotel `ADD TotalRooms -1` | 6, 13, 22 |

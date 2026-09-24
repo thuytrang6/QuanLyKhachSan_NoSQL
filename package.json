@@ -9,8 +9,9 @@
   ],
   "scripts": {
     "seed": "node seed.js",
+    "seed:reset": "node seed.js --reset",
     "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
-    "ddb:local": "docker run -d --name dynamodb-local -p 8000:8000 amazon/dynamodb-local"
+    "ddb:local": "docker run -d --name dynamodb-local-data -p 8001:8000 -v hotel-dynamodb-data:/home/dynamodblocal/data --restart unless-stopped amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.600.0",

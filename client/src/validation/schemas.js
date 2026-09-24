@@ -29,6 +29,8 @@ export const searchSchema = z.object({
   childrenOver1m: count(0, "Trẻ trên 1m"),
   childrenUnder1m: count(0, "Trẻ dưới 1m"),
   roomTypeId: z.string().optional(),
+  maxPrice: z.string().optional(),
+  sort: z.string().optional(),
 }).refine((v) => v.checkOut > v.checkIn, { path: ["checkOut"], message: "Ngày trả phòng phải sau ngày nhận phòng" });
 
 export const bookingFormSchema = z.object({

@@ -1,4 +1,5 @@
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -7,27 +8,30 @@ import { authApi } from "../api/auth";
 import { useAuth } from "../context/AuthContext";
 import { loginSchema } from "../validation/schemas";
 import Field from "../components/Field";
-import { homeOf } from "../components/ProtectedRoute";
+import { afterAuthPath } from "../components/ProtectedRoute";
+import AlreadySignedIn from "../components/AlreadySignedIn";
 
 export default function LoginPage() {
   const { user, setUser } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
+  const from = location.state && location.state.from;
+  const [justSignedIn, setJustSignedIn] = useState(false);
   const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(loginSchema) });
 
   const login = useMutation({
     mutationFn: authApi.login,
     onSuccess: (u) => {
+      setJustSignedIn(true);
       setUser(u);
       toast.success(`Xin chào ${u.FullName}`);
-      const from = location.state && location.state.from;
-      const allowed = from && (u.role === "admin" ? from.startsWith("/admin") : !from.startsWith("/admin"));
-      navigate(allowed ? from : homeOf(u), { replace: true });
     },
     onError: (e) => toast.error(e.message),
   });
 
-  if (user) return <Navigate to={homeOf(user)} replace />;
+  // Vừa đăng nhập bằng form này -> chuyển hướng (quay lại trang đang xem trước khi đăng nhập)
+  if (user && justSignedIn) return <Navigate to={afterAuthPath(user, from)} replace />;
+  // Mở /login khi đã đăng nhập sẵn -> cho chọn tiếp tục hoặc đổi tài khoản
+  if (user) return <AlreadySignedIn from={from} />;
 
   return (
     <div className="mx-auto max-w-md px-4 py-16">
@@ -46,7 +50,7 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
-          Chưa có tài khoản? <Link to="/register" className="font-medium text-brand-600 hover:underline">Đăng ký</Link>
+          Chưa có tài khoản? <Link to="/register" state={location.state} className="font-medium text-brand-600 hover:underline">Đăng ký</Link>
         </p>
       </div>
     </div>

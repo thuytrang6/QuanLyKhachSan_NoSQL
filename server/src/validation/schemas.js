@@ -32,9 +32,22 @@ const stay = {
   childrenUnder1m: count(0, "Số trẻ dưới 1m").default(0),
 };
 
+const emptyToUndef = (s) => z.preprocess((v) => (v === "" || v == null ? undefined : v), s);
+const roomTypeId = z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,10}$/).optional().or(z.literal("").transform(() => undefined));
+
 const search = z.object({
   ...stay,
-  roomTypeId: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,10}$/).optional().or(z.literal("").transform(() => undefined)),
+  roomTypeId,
+  maxPrice: emptyToUndef(z.coerce.number().int().positive("Giá tối đa phải lớn hơn 0").optional()),
+  sort: emptyToUndef(z.enum(["price_asc", "price_desc", "floor"]).default("price_asc")),
+});
+
+// Chi tiết phòng: ngày lưu trú không bắt buộc (chưa chọn ngày thì chỉ xem thông tin + lịch trống)
+const roomDetail = z.object({
+  checkIn: emptyToUndef(date.optional()),
+  checkOut: emptyToUndef(date.optional()),
+  adults: emptyToUndef(count(1, "Số người lớn").default(1)),
+  childrenOver1m: emptyToUndef(count(0, "Số trẻ trên 1m").default(0)),
 });
 
 const quote = z.object({
@@ -76,6 +89,8 @@ const roomFilter = z.object({
   floor: z.coerce.number().int().optional(),
   roomTypeId: z.string().trim().optional().transform((s) => s || undefined),
   status: z.string().trim().optional().transform((s) => s || undefined),
+  page: emptyToUndef(z.coerce.number().int().min(1, "Trang tối thiểu là 1").default(1)),
+  pageSize: emptyToUndef(z.coerce.number().int().min(5, "Mỗi trang tối thiểu 5 phòng").max(100, "Mỗi trang tối đa 100 phòng").default(10)),
 });
 
-module.exports = { date, month, login, register, search, quote, createBooking, cancelBooking, roomCreate, roomUpdate, roomFilter };
+module.exports = { date, month, login, register, search, roomDetail, quote, createBooking, cancelBooking, roomCreate, roomUpdate, roomFilter };
