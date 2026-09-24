@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Quản lý đặt phòng khách sạn — Amazon DynamoDB (single-table)
 
 Web app Node.js + React cho đồ án môn Dữ liệu NoSQL. Toàn bộ dữ liệu nằm trong **một bảng DynamoDB `HotelBookingTable`** (PK/SK + GSI1–3) theo thiết kế trong `Database/HuongDan_DB_HotelBooking_v2.docx`. Backend chỉ dùng **Query / GetItem / TransactWrite** theo access pattern của docx (mục 5), không dùng Scan, không có mock data.
@@ -116,3 +117,6 @@ Dữ liệu mẫu lấy mốc **24/09/2026**. Trên dashboard có nút **"Dùng 
 6. Doanh thu tháng 09/2026 = **753.007.000đ** (199 hóa đơn).
 7. Tạo, sửa (kèm RoomStatusLog, Version), xóa phòng mới đều hoạt động. Phòng 101 không xóa được (đã có lịch sử). Phòng Occupied không đổi được Status.
 8. Grep `server/src` và `client/src` không còn giá, voucher, tên khách sạn hay tài khoản hardcode. Mọi con số đều đọc từ DynamoDB.
+=======
+# QuanLyKhachSan_NoSQL
+>>>>>>> f7a240cc52a177bc13355467e3ed4f368d2991a7
