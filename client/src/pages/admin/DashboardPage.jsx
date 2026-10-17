@@ -117,7 +117,7 @@ export default function DashboardPage() {
         <Panel className="lg:col-span-2" title={`Top hóa đơn tháng ${formatMonth(month)}`}
           right={<input type="month" className="input w-40 py-1" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />}>
           {invoices.isLoading ? <TableSkeleton cols={3} rows={8} /> : invoices.isError ? <ErrorState error={invoices.error} onRetry={invoices.refetch} /> :
-            invoices.data.top.length === 0 ? <EmptyState icon="🧾" title="Chưa có hóa đơn trong tháng" /> : (
+            invoices.data.top.length === 0 ? <EmptyState title="Chưa có hóa đơn trong tháng" /> : (
               <div className="max-h-72 overflow-auto">
                 <table className="min-w-full text-sm">
                   <thead className="sticky top-0 bg-white"><tr><th className="th">Số HĐ</th><th className="th">Khách</th><th className="th text-right">Tổng</th></tr></thead>
@@ -211,13 +211,13 @@ export default function DashboardPage() {
 
       <Panel title="10 đánh giá mới nhất" subtitle={overview.data && overview.data.hotel ? `Trung bình ${overview.data.hotel.RatingAvg} sao · ${formatNumber(overview.data.hotel.ReviewCount)} lượt` : undefined}>
         {overview.isLoading ? <TableSkeleton cols={1} rows={4} /> : overview.isError ? <ErrorState error={overview.error} onRetry={overview.refetch} /> :
-          overview.data.reviews.length === 0 ? <EmptyState icon="⭐" title="Chưa có đánh giá" /> : (
+          overview.data.reviews.length === 0 ? <EmptyState title="Chưa có đánh giá" /> : (
             <ul className="grid gap-3 md:grid-cols-2">
               {overview.data.reviews.map((r) => (
                 <li key={r.ReviewID} className="rounded-lg border border-slate-100 p-3">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{r.CustomerName}</span>
-                    <span className="text-amber-500" aria-label={`${r.Rating} sao`}>{"★".repeat(r.Rating)}<span className="text-slate-300">{"★".repeat(5 - r.Rating)}</span></span>
+                    <span className="font-semibold text-amber-600">{r.Rating} / 5 sao</span>
                   </div>
                   <p className="mt-1 text-sm text-slate-600">{r.Comment}</p>
                   <p className="mt-1 text-xs text-slate-400">{r.RoomTypeID} · {r.BookingID} · {formatDateTime(r.CreatedAt)}</p>
@@ -233,7 +233,7 @@ export default function DashboardPage() {
 function BookingTable({ q, rows, empty, showCheckout, today }) {
   if (q.isLoading) return <TableSkeleton cols={4} rows={4} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
-  if (!rows || rows.length === 0) return <EmptyState icon="🛎️" title={empty} />;
+  if (!rows || rows.length === 0) return <EmptyState title={empty} />;
   return (
     <div className="max-h-80 overflow-auto">
       <table className="min-w-full text-sm">

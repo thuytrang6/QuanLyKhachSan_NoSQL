@@ -34,7 +34,7 @@ export default function Pagination({ page, pageSize, total, totalPages, onPage, 
       </div>
       {totalPages > 1 && (
         <nav className="flex items-center gap-1" aria-label="Phân trang">
-          <button className={`${btn} text-slate-600 hover:bg-slate-100`} onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Trang trước">‹ Trước</button>
+          <button className={`${btn} text-slate-600 hover:bg-slate-100`} onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Trang trước">Trước</button>
           {pageList(page, totalPages).map((p) => (typeof p === "string"
             ? <span key={p} className="px-1 text-slate-400">…</span>
             : (
@@ -43,7 +43,7 @@ export default function Pagination({ page, pageSize, total, totalPages, onPage, 
                 {p}
               </button>
             )))}
-          <button className={`${btn} text-slate-600 hover:bg-slate-100`} onClick={() => onPage(page + 1)} disabled={page >= totalPages} aria-label="Trang sau">Sau ›</button>
+          <button className={`${btn} text-slate-600 hover:bg-slate-100`} onClick={() => onPage(page + 1)} disabled={page >= totalPages} aria-label="Trang sau">Sau</button>
         </nav>
       )}
     </div>

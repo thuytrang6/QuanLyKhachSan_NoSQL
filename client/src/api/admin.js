@@ -13,4 +13,12 @@ export const adminApi = {
   updateRoom: (id, body) => unwrap(http.put(`/admin/rooms/${id}`, body)),
   deleteRoom: (id) => unwrap(http.delete(`/admin/rooms/${id}`)),
   roomLogs: (id) => unwrap(http.get(`/admin/rooms/${id}/logs`)),
+
+  // Backup & Restore
+  createBackup: () => unwrap(http.post("/admin/backup")),
+  listBackups: () => unwrap(http.get("/admin/backups")),
+  restoreBackup: (filename) => unwrap(http.post("/admin/restore", { filename })),
+  restoreSeed: () => unwrap(http.post("/admin/restore-seed")),
+  restoreUpload: (jsonData) => unwrap(http.post("/admin/restore-upload", jsonData)),
+  deleteBackup: (filename) => unwrap(http.delete(`/admin/backups/${filename}`)),
 };

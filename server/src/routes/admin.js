@@ -1,11 +1,14 @@
 const router = require("express").Router();
+const path = require("path");
+const fs = require("fs");
 const { z } = require("zod");
 const reportService = require("../services/report");
 const roomService = require("../services/room");
+const backupService = require("../services/backup");
 const S = require("../validation/schemas");
 const { validate } = require("../middlewares/validate");
 const { requireAuth, requireRole } = require("../middlewares/auth");
-const { asyncHandler, badRequest } = require("../utils/errors");
+const { asyncHandler, badRequest, notFound } = require("../utils/errors");
 
 router.use(requireAuth, requireRole("admin"));
 
@@ -49,5 +52,36 @@ router.delete("/rooms/:id", roomIdParam,
 
 router.get("/rooms/:id/logs", roomIdParam,
   asyncHandler(async (req, res) => res.json({ data: await roomService.listLogs(req.params.id) })));
+
+// ---------- Sao lưu & Phục hồi (Backup & Restore) ----------
+router.post("/backup",
+  asyncHandler(async (req, res) => res.status(201).json({ data: await backupService.createBackup() })));
+
+router.get("/backups",
+  asyncHandler(async (req, res) => res.json({ data: await backupService.listBackups() })));
+
+router.post("/restore", validate(z.object({ filename: z.string().min(1) })),
+  asyncHandler(async (req, res) => res.json({ data: await backupService.restoreBackup(req.valid.filename) })));
+
+router.post("/restore-seed",
+  asyncHandler(async (req, res) => res.json({ data: await backupService.resetToOriginalSeed() })));
+
+router.post("/restore-upload",
+  asyncHandler(async (req, res) => res.json({ data: await backupService.restoreFromUploadedJson(req.body) })));
+
+router.delete("/backups/:filename",
+  asyncHandler(async (req, res) => res.json({ data: await backupService.deleteBackup(req.params.filename) })));
+
+router.get("/backups/:filename/download", (req, res) => {
+  const filename = req.params.filename;
+  if (!/^[\w.-]+$/.test(filename)) return res.status(400).json({ error: { message: "Tên file không hợp lệ" } });
+  const backupRepo = require("../repositories/backupRepo");
+  const filePath = filename === "HotelBookingTable.json"
+    ? backupRepo.ORIGINAL_DATA_FILE
+    : path.join(backupRepo.BACKUP_DIR, filename);
+
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: { message: "Không tìm thấy file sao lưu" } });
+  res.download(filePath, filename);
+});
 
 module.exports = router;

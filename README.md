@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Quản lý đặt phòng khách sạn — Amazon DynamoDB (single-table)
 
 Web app Node.js + React cho đồ án môn Dữ liệu NoSQL. Toàn bộ dữ liệu nằm trong **một bảng DynamoDB `HotelBookingTable`** (PK/SK + GSI1–3) theo thiết kế trong `Database/HuongDan_DB_HotelBooking_v2.docx`. Backend chỉ dùng **Query / GetItem / TransactWrite** theo access pattern của docx (mục 5), không dùng Scan, không có mock data.
@@ -11,7 +10,7 @@ Web app Node.js + React cho đồ án môn Dữ liệu NoSQL. Toàn bộ dữ li
 │   └── src/
 │       ├── config/db.js         # DynamoDBDocumentClient, queryAll/countAll có phân trang
 │       ├── repositories/        # NƠI DUY NHẤT gọi DynamoDB (mỗi hàm ghi chú access pattern)
-│       ├── services/            # quy tắc nghiệp vụ: pricing, booking, auth, room, report
+│       ├── services/            # quy tắc nghiệp vụ: pricing, booking, auth, room, report, backup
 │       ├── routes/              # auth, rooms, bookings, admin
 │       ├── middlewares/         # requireAuth, requireRole, validate (zod), error
 │       └── validation/          # zod schema
@@ -24,19 +23,14 @@ Web app Node.js + React cho đồ án môn Dữ liệu NoSQL. Toàn bộ dữ li
 Yêu cầu: Node.js 18+, Docker.
 
 ```bash
-# 1. DynamoDB Local LƯU ĐĨA vào Docker volume, cổng 8001 (khớp DDB_ENDPOINT trong server/.env)
-#    Dữ liệu (tài khoản đăng ký, đơn đặt phòng...) còn nguyên khi tắt Docker / khởi động lại máy.
-#    Container tự chạy lại cùng Docker (--restart unless-stopped). Chỉ cần tạo 1 lần:
+# 1. DynamoDB Local (chạy container Docker)
+#    Mặc định DynamoDB Local chạy trên cổng 8000 (khớp DDB_ENDPOINT=http://localhost:8000 trong server/.env)
 npm run ddb:local
-#    (tương đương: docker run -d --name dynamodb-local-data -p 8001:8000
-#       -v hotel-dynamodb-data:/home/dynamodblocal/data --restart unless-stopped
-#       amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb -dbPath ./data)
 
-# 2. Cài thư viện (npm workspaces: 1 lệnh cài cho cả server và client,
-#    chỉ có 1 package-lock.json và 1 node_modules ở thư mục gốc)
+# 2. Cài thư viện (npm workspaces: 1 lệnh cài cho cả server và client)
 npm install
 
-# 3. Tạo bảng + nạp dữ liệu mẫu (đọc cấu hình trong server/.env) — chỉ cần chạy lần đầu, khoảng 3-4 phút
+# 3. Tạo bảng + nạp dữ liệu mẫu (chỉ cần chạy lần đầu, nạp 18.135 items)
 npm run seed
 
 # 4. Chạy API + web song song
@@ -45,23 +39,11 @@ npm run dev
 
 Mở http://localhost:5173.
 
-- `server/.env` đã có sẵn cấu hình cho DynamoDB Local (xem `server/.env.example`). Muốn dùng AWS thật: xóa `DDB_ENDPOINT`, đặt `AWS_REGION=ap-southeast-1` và cấu hình credentials.
+- `server/.env` đã có sẵn cấu hình cho DynamoDB Local (`DDB_ENDPOINT=http://localhost:8000`, `PORT=4000`, `TABLE=HotelBookingTable`). Muốn dùng AWS thật: xóa `DDB_ENDPOINT`, đặt `AWS_REGION=ap-southeast-1` và cấu hình credentials.
 - **`npm run seed`**: tạo bảng nếu chưa có rồi nạp dữ liệu mẫu. Nếu bảng đã có, seed **không xóa gì**: chỉ ghi đè các item mẫu về trạng thái ban đầu, **giữ nguyên** tài khoản đăng ký, đơn đặt phòng, phòng tạo thêm.
 - **`npm run seed:reset`**: xóa bảng và tạo lại từ đầu (chỉ DynamoDB Local). **Mất mọi dữ liệu tạo thêm**, chỉ dùng khi thật sự muốn làm sạch.
 - Seed đặt lại `ExpiresAt` của đơn Pending **BK002314** = lúc nạp + 15 phút (demo TTL). 4 item `PK=COUNTER` (CUSTOMER, BOOKING, PAYMENT, LOG) được nâng lên mã lớn nhất của dữ liệu mẫu nhưng **không bao giờ bị hạ xuống**, nên seed lại không làm trùng mã đã cấp (lần đầu, mã tiếp theo là C0321, BK002317, P004206, L000581).
-- Dùng Docker **volume** (`hotel-dynamodb-data`), không lưu vào thư mục bên trong container: vừa giữ được dữ liệu, vừa ghi nhanh hơn nhiều. Xóa hẳn dữ liệu: `docker rm -f dynamodb-local-data && docker volume rm hotel-dynamodb-data`.
-- Nếu dùng Git Bash để chạy `docker run`, đường dẫn `/home/...` bị tự đổi thành `C:/Program Files/Git/...`, nên lệnh ở trên dùng `-dbPath ./data`. PowerShell và CMD không bị lỗi này.
-- Ảnh phòng lấy theo đường dẫn trong DB (`images/rooms/std-1.jpg`...). Đặt file ảnh vào `client/public/images/rooms/`. Nếu chưa có file ảnh, giao diện hiện khung thay thế.
-
-## Xử lý sự cố
-
-| Hiện tượng | Nguyên nhân / cách xử lý |
-|---|---|
-| Đăng nhập báo "Không kết nối được máy chủ", `/api/health` vẫn ok | DynamoDB Local không phản hồi hoặc chưa chạy. Mở Docker Desktop, kiểm tra `docker ps` có `dynamodb-local-data`; nếu treo thì `docker restart dynamodb-local-data` (dữ liệu vẫn còn). |
-| Seed báo "Đang có một lệnh seed khác chạy" | Chỉ chạy **một** lệnh seed mỗi lần, vì 2 lệnh ghi chồng sẽ làm kẹt khóa database. Đợi lệnh kia in `Xong.` |
-| `npm run dev` báo `EADDRINUSE :4000`, hoặc Vite chạy ở cổng 5174 | Còn một bản dev cũ đang chạy. Tắt nó đi (Ctrl+C ở terminal cũ) rồi chạy lại. |
-| Dashboard thiếu số liệu, đăng nhập sai dù đúng mật khẩu | Seed chưa xong hoặc bị ngắt giữa chừng. Chạy lại `npm run seed` (không mất tài khoản đã đăng ký) và đợi dòng `Xong.` |
-| Xem dữ liệu bằng giao diện web (dynamodb-admin) | Trỏ tới cổng 8001: `docker run -d --name dynamodb-admin -p 8003:8001 -e DYNAMO_ENDPOINT=http://host.docker.internal:8001 aaronshaf/dynamodb-admin`, mở http://localhost:8003 |
+- Ảnh phòng lấy theo đường dẫn trong DB (`images/rooms/std-1.jpg`...). Đặt file ảnh vào `client/public/images/rooms/`. Nếu chưa có file ảnh, giao diện hiện khung thay thế đẹp mắt.
 
 ## Tài khoản test (mật khẩu `123456`)
 
@@ -81,48 +63,57 @@ Dữ liệu mẫu lấy mốc **24/09/2026**. Trên dashboard có nút **"Dùng 
 | Chức năng | API | Thao tác DynamoDB | AP |
 |---|---|---|---|
 | Đăng nhập, `/auth/me` | `POST /api/auth/login`, `GET /api/auth/me` | Query GSI2 `EMAIL#<email>` / `PROFILE` + bcrypt | 11 |
+| Sửa hồ sơ khách hàng | `PUT /api/auth/me` | UpdateItem `CUSTOMER#<id>` / `PROFILE` (FullName, Phone, IDNumber, Address...) | 12 |
 | Đăng ký | `POST /api/auth/register` | GetItem `UNIQUE#EMAIL#<email>` (kiểm tra trước) → UpdateItem `COUNTER/CUSTOMER` ADD Seq → TransactWrite Put Customer + Put UniqueEmail `attribute_not_exists(PK)` | 12 |
 | Thông tin khách sạn (header) | `GET /api/hotel` | GetItem `HOTEL#MAIN / METADATA` | 1 |
 | Danh sách loại phòng | `GET /api/rooms/types` | Query `HOTEL#MAIN`, begins_with `ROOMTYPE#` | 2 |
-| Trang chủ: tìm phòng trống, lọc giá tối đa/đêm, sắp xếp (công khai, không cần đăng nhập) | `GET /api/rooms/search` | Query `HOTEL#MAIN` begins_with `ROOM#` + mỗi đêm Query GSI1 `NIGHT#<date>` begins_with `ROOMTYPE#<type>` (Booked, hoặc Held còn hạn) + Query `RATE#<type>#`; lọc `maxPrice` và `sort` ở server | 3, 5, 25 |
-| Chi tiết phòng + lịch còn trống 2 tháng (công khai) | `GET /api/rooms/:id` | GetItem Room + GetItem RoomType + Query `ROOM#<id>` SK BETWEEN `NIGHT#<đầu tháng>` AND `NIGHT#<cuối tháng sau>`; nếu có ngày: Query `ROOM#<id>` SK BETWEEN cho khoảng lưu trú + giá theo `RATE#` | 2, 3, 6, 25 |
-| Tính giá, báo giá | `POST /api/bookings/quote` | GetItem Room; Query `ROOMTYPE#`; Query `RATE#<type>#`; GetItem `VOUCHER#<code>`; GetItem Hotel (Policies) | 1, 2, 3, 25, 27 |
-| Đặt phòng (Pending, giữ 15 phút) | `POST /api/bookings` | Query `ROOM#<id>` SK BETWEEN (kiểm tra sớm) → TransactWrite: Put Booking + ConditionCheck Room + Put RoomNight Held `attribute_not_exists(PK) OR (Status=Held AND ExpiresAt<now)` + Update Voucher `ADD UsedCount 1` (IsActive AND UsedCount<UsageLimit) | 6, 7 |
-| Thanh toán cọc (VNPay demo) | `POST /api/bookings/:id/pay` | Query `BOOKING#<id>` → TransactWrite: Put Payment Deposit + Update Booking Pending→Confirmed (Status=Pending AND ExpiresAt>now, REMOVE ExpiresAt, ADD Version) + Update RoomNight Held→Booked | 7, 8 |
-| Lịch sử đặt phòng | `GET /api/bookings` | Query GSI2 `CUSTOMER#<id>` begins_with `BOOKING#`, ScanIndexForward=false | 10 |
-| Chi tiết đơn | `GET /api/bookings/:id` | Query `PK=BOOKING#<id>` (Booking, Payment, Service, Surcharge, Invoice) | 8, 9 |
-| Hủy đơn Confirmed | `POST /api/bookings/:id/cancel` | TransactWrite: Update Booking → Cancelled (Version khớp) + Delete RoomNight (BookingID khớp) + Update Voucher `ADD UsedCount -1` + Put Payment Refund nếu hủy trước 14:00 ngày nhận phòng ≥ 48h | 7, 8 |
-| Doanh thu 12 tháng | `GET /api/admin/reports/revenue` | Query GSI3 `INVMONTH#<yyyy-mm>` × 12 (phân trang), cộng TotalAmount | 23 |
+| Trang chủ: tìm phòng trống, lọc giá/tầng/loại, gắn tag lễ | `GET /api/rooms/search` | Query `HOTEL#MAIN` begins_with `ROOM#` + mỗi đêm Query GSI1 `NIGHT#<date>` begins_with `ROOMTYPE#<type>` (Booked, hoặc Held còn hạn) + Query `RATE#<type>#`; lọc `maxPrice` và `sort` ở server | 3, 5, 25 |
+| Chi tiết phòng + lịch còn trống 2 tháng | `GET /api/rooms/:id` | GetItem Room + GetItem RoomType + Query `ROOM#<id>` SK BETWEEN `NIGHT#<đầu tháng>` AND `NIGHT#<cuối tháng sau>`; nếu có ngày: Query `ROOM#<id>` SK BETWEEN cho khoảng lưu trú + giá theo `RATE#` | 2, 3, 6, 25 |
+| Tính giá (trẻ em + ngày lễ + voucher) | `POST /api/bookings/quote` | GetItem Room; Query `ROOMTYPE#`; Query `RATE#<type>#`; GetItem `VOUCHER#<code>`; GetItem Hotel (Policies); tính phụ thu trẻ em (>1m: 100k/đêm) và hệ số ngày lễ | 1, 2, 3, 25, 27 |
+| Đặt phòng trực tiếp (Không cần thanh toán, Confirmed ngay) | `POST /api/bookings` | TransactWrite: Put Booking Confirmed (RoomID, CustomerID, TotalAmount...) + ConditionCheck Room + Put RoomNight Booked + Update Voucher `ADD UsedCount 1` | 6, 7 |
+| Đặt phòng giữ chỗ (Pending 15p) | `POST /api/bookings` | TransactWrite: Put Booking Pending + ConditionCheck Room + Put RoomNight Held + Update Voucher | 6, 7 |
+| Thanh toán cọc demo (VNPay) | `POST /api/bookings/:id/pay` | Query `BOOKING#<id>` → TransactWrite: Put Payment Deposit + Update Booking Pending→Confirmed + Update RoomNight Held→Booked | 7, 8 |
+| Sửa ghi chú đơn đặt phòng | `PATCH /api/bookings/:id/notes` | UpdateItem `BOOKING#<id>` (SET Notes = :notes, UpdatedAt = :now, ADD Version 1) | 8 |
+| Lịch sử đặt phòng của khách | `GET /api/bookings` | Query GSI2 `CUSTOMER#<id>` begins_with `BOOKING#`, ScanIndexForward=false | 10 |
+| Chi tiết đơn đặt phòng | `GET /api/bookings/:id` | Query `PK=BOOKING#<id>` (Booking, Payment, Service, Surcharge, Invoice) | 8, 9 |
+| Hủy đơn đặt phòng | `POST /api/bookings/:id/cancel` | TransactWrite: Update Booking → Cancelled (Version khớp) + Delete RoomNight (BookingID khớp) + Update Voucher `ADD UsedCount -1` + Put Payment Refund nếu đủ điều kiện | 7, 8 |
+| Doanh thu 12 tháng (Dashboard) | `GET /api/admin/reports/revenue` | Query GSI3 `INVMONTH#<yyyy-mm>` × 12 (phân trang), cộng TotalAmount | 23 |
 | Top hóa đơn tháng | `GET /api/admin/reports/invoices` | Query GSI3 `INVMONTH#<yyyy-mm>` | 23 |
-| Booking theo trạng thái | `GET /api/admin/reports/booking-status` | Query GSI3 `BKSTATUS#<status>` Select=COUNT × 6 | 14, 15, 17 |
+| Số booking theo 6 trạng thái | `GET /api/admin/reports/booking-status` | Query GSI3 `BKSTATUS#<status>` Select=COUNT × 6 | 14, 15, 17 |
 | Công suất phòng theo ngày | `GET /api/admin/reports/occupancy` | Query GSI1 `NIGHT#<date>` filter Booked, Select=COUNT / Query `ROOM#` Select=COUNT | 3, 5 |
 | Khách đến hôm nay, khách đang ở, đánh giá | `GET /api/admin/reports/overview` | GSI3 `BKSTATUS#Confirmed` begins_with `CHECKIN#<date>`; GSI3 `BKSTATUS#CheckedIn`; GetItem Hotel; Query `REVIEW#` desc Limit 10 | 1, 14, 15, 28 |
 | Sơ đồ trạng thái phòng (refetch 5 giây) | `GET /api/admin/room-board` | Query GSI3 `ROOMSTATUS#<status>` × 5 | 4 |
-| Danh sách phòng + lọc + phân trang | `GET /api/admin/rooms?page=&pageSize=` | Query `HOTEL#MAIN` begins_with `ROOM#` (có phân trang LastEvaluatedKey), lọc tầng/loại/trạng thái rồi chia trang ở server; trả `{ items, total, page, pageSize, totalPages, floors }` | 3 |
-| Tạo phòng | `POST /api/admin/rooms` | GetItem RoomType → TransactWrite Put Room `attribute_not_exists(PK)` (GSI3 `ROOMSTATUS#Available`, Version 1) + Hotel `ADD TotalRooms 1` | 2, 3 |
-| Sửa phòng / đổi trạng thái | `PUT /api/admin/rooms/:id` | TransactWrite Update Room (Version khớp, không Occupied; SET Status, GSI3PK, UpdatedAt, ADD Version) + Put RoomStatusLog | 3, 4, 22 |
-| Xóa phòng | `DELETE /api/admin/rooms/:id` | Query GSI1 `ROOM#<id>` begins_with `CHECKIN#` Limit 1 + Query `ROOM#<id>` begins_with `NIGHT#` Limit 1 → TransactWrite Delete Room + log + Hotel `ADD TotalRooms -1` | 6, 13, 22 |
+| Danh sách phòng + lọc + phân trang | `GET /api/admin/rooms` | Query `HOTEL#MAIN` begins_with `ROOM#` (LastEvaluatedKey phân trang), lọc tầng/loại/trạng thái | 3 |
+| Tạo phòng mới | `POST /api/admin/rooms` | GetItem RoomType → TransactWrite Put Room `attribute_not_exists(PK)` (GSI3 `ROOMSTATUS#Available`, Version 1) + Hotel `ADD TotalRooms 1` | 2, 3 |
+| Sửa phòng / đổi trạng thái (Optimistic Lock) | `PUT /api/admin/rooms/:id` | TransactWrite Update Room (Version khớp, không Occupied; SET Status, GSI3PK, UpdatedAt, ADD Version 1) + Put RoomStatusLog | 3, 4, 22 |
+| Xóa phòng | `DELETE /api/admin/rooms/:id` | Query GSI1 `ROOM#<id>` begins_with `CHECKIN#` + Query `ROOM#<id>` begins_with `NIGHT#` → TransactWrite Delete Room + log + Hotel `ADD TotalRooms -1` (chặn nếu đã có lịch sử) | 6, 13, 22 |
 | Nhật ký trạng thái phòng | `GET /api/admin/rooms/:id/logs` | Query `ROOM#<id>` begins_with `LOG#`, mới nhất trước | 22 |
-| Sinh mã C/BK/P/L | (nội bộ) | UpdateItem `PK=COUNTER, SK=<name>` ADD Seq 1, ReturnValues UPDATED_NEW | bổ sung |
+| Sao lưu & Phục hồi DynamoDB | `GET/POST /api/admin/backup*` | Scan toàn bộ bảng thành JSON, nạp ngược lại bảng bằng BatchWriteCommand theo khối 25 item | Quản trị |
 
-## Quy tắc nghiệp vụ đã cài đặt
+## Quy tắc nghiệp vụ
 
-- **Giá đêm** = BasePrice × Multiplier của Rate có Priority cao nhất bao phủ đêm đó, làm tròn nghìn. Voucher kiểm tra IsActive, hạn (theo ngày tạo đơn), MinOrder, MinNights, UsedCount < UsageLimit. `TotalPrice = SubTotal − Discount`, cọc = `DepositPercent` (20%, đọc từ Hotel.Policies) làm tròn nghìn.
-- **Chống đặt trùng**: mỗi đêm của mỗi phòng là 1 item RoomNight, ghi có điều kiện trong TransactWrite. Hai người bấm đặt cùng lúc thì chỉ 1 người thành công, người kia nhận 409 "Phòng vừa được người khác đặt, vui lòng chọn phòng khác" và danh sách phòng tự tải lại.
-- **Hết hạn giữ chỗ**: backend luôn tự so `ExpiresAt` với thời điểm hiện tại, không chờ TTL (docx 7.6). Đêm Held quá hạn được coi là trống và cho phép ghi đè.
-- **Đổi Status** của Room/Booking luôn cập nhật cùng lúc `Status`, `GSI3PK`, `UpdatedAt` và `ADD Version 1`. Sửa phòng dùng khóa lạc quan theo Version (lệch thì trả 409 "Dữ liệu đã bị người khác sửa, tải lại").
-- API trả `{ data }` hoặc `{ error: { code, message } }`. Mã lỗi: 400 dữ liệu không hợp lệ, 401, 403, 404, 409 xung đột.
+1. **Tính tiền theo trẻ em & ngày lễ**:
+   - **Trẻ em**:
+     - Trẻ em dưới 1m: **Miễn phí** (0đ).
+     - Trẻ em trên 1m: Phụ thu **100.000đ / trẻ / đêm**.
+     - Tổng phụ thu trẻ em: `ChildSurchargeTotal = childrenOver1m × 100.000 × số_đêm`.
+   - **Ngày lễ**:
+     - Tự động nhận diện các ngày lễ lớn trong năm 2026 (Tết Dương lịch, Giỗ tổ Hùng Vương, 30/4 - 1/5, Quốc khánh 2/9, Giáng sinh...) và kết hợp với item `Rate` trong DynamoDB (`Multiplier > 1`).
+     - Giao diện hiển thị trực quan huy hiệu lễ (ví dụ: `🎉 Lễ Quốc khánh 2/9 (x1.3)`).
+2. **Đặt phòng không cần thanh toán**:
+   - Khách có thể chọn tùy chọn: **"Xác nhận đặt phòng (Thanh toán tại khách sạn)"**.
+   - Đơn lập tức chuyển trạng thái `Confirmed`, các đêm phòng chuyển thành `Booked`, không bị hủy tự động sau 15 phút.
+   - Hỗ trợ cả chế độ demo VNPay cọc 20% (trạng thái ban đầu `Pending`, đếm ngược 15 phút).
+3. **Sửa thông tin**:
+   - Khách hàng có thể cập nhật thông tin cá nhân (Họ tên, SĐT, CMND/CCCD, Quốc tịch, Ngày sinh, Địa chỉ) tại trang `/profile`.
+   - Khách hàng có thể cập nhật Ghi chú đơn đặt phòng (`Notes`) tại chi tiết đơn đặt phòng.
+4. **Admin Backup - Restore**:
+   - Trang `/admin/backup` cho phép:
+     - Tạo bản sao lưu tức thì (lưu file JSON kèm timestamp).
+     - Xem danh sách và tải file sao lưu về máy.
+     - Khôi phục dữ liệu từ bản sao lưu bất kỳ, hoặc tải file JSON từ máy tính lên để khôi phục.
+     - Nút khôi phục dữ liệu gốc `seed` (18.135 items) nhanh chóng.
+5. **Chống đặt trùng & khóa lạc quan**:
+   - Mỗi đêm phòng là một item `RoomNight` độc lập, kiểm tra điều kiện trong `TransactWriteCommand`.
+   - Đổi Status của Room/Booking luôn cập nhật cùng lúc: `Status`, `GSI3PK`, `UpdatedAt` và `ADD Version 1`.
 
-## Kiểm thử đã chạy (DynamoDB Local, dữ liệu seed)
-
-1. Đăng ký email mới → C0321; đăng ký trùng email → 409 "Email đã được sử dụng".
-2. Customer mở `/admin` → chuyển tới trang 403; gọi API admin → 403.
-3. Tìm 25/09–27/09/2026 loại DLX → 207, 208, 401, 408 (**không có 205**).
-4. Hai phiên đặt cùng phòng cùng đêm đồng thời → 201 / 409.
-5. Đơn Pending quá hạn → phòng xuất hiện lại khi tìm, thanh toán bị từ chối (409), người khác đặt được.
-6. Doanh thu tháng 09/2026 = **753.007.000đ** (199 hóa đơn).
-7. Tạo, sửa (kèm RoomStatusLog, Version), xóa phòng mới đều hoạt động. Phòng 101 không xóa được (đã có lịch sử). Phòng Occupied không đổi được Status.
-8. Grep `server/src` và `client/src` không còn giá, voucher, tên khách sạn hay tài khoản hardcode. Mọi con số đều đọc từ DynamoDB.
-=======
-# QuanLyKhachSan_NoSQL
->>>>>>> f7a240cc52a177bc13355467e3ed4f368d2991a7

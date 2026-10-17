@@ -1,4 +1,4 @@
-const { TransactWriteCommand } = require("@aws-sdk/lib-dynamodb");
+const { TransactWriteCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const { ddb, TABLE, queryAll, countAll } = require("../config/db");
 
 const bookingKey = (id) => ({ PK: "BOOKING#" + id, SK: "METADATA" });
@@ -7,22 +7,32 @@ const nightKey = (roomId, date) => ({ PK: "ROOM#" + roomId, SK: "NIGHT#" + date 
 // Thứ tự thao tác trong transaction tạo booking — service dùng để biết điều kiện nào thất bại
 const CREATE_TX = { BOOKING: 0, ROOM: 1, FIRST_NIGHT: 2 };
 
-// AP7 — Đặt phòng không trùng lịch (docx 13.4): TransactWrite Put Booking Pending + Put RoomNight Held từng đêm + Update Voucher
-async function createOnlineBooking(b, { now, nowSec, expiresAt }) {
+// AP7 — Đặt phòng không trùng lịch (docx 13.4): TransactWrite Put Booking (Pending/Confirmed) + Put RoomNight (Held/Booked) từng đêm + Update Voucher
+async function createOnlineBooking(b, { now, nowSec, expiresAt, isDirectConfirm = false }) {
   const k = `CHECKIN#${b.CheckInDate}#${b.BookingID}`;
+  const bookingStatus = isDirectConfirm ? "Confirmed" : "Pending";
+  const nightStatus = isDirectConfirm ? "Booked" : "Held";
+
+  const bookingItem = {
+    ...bookingKey(b.BookingID), EntityType: "Booking",
+    GSI1PK: "ROOM#" + b.RoomID, GSI1SK: k,
+    GSI2PK: "CUSTOMER#" + b.CustomerID, GSI2SK: `BOOKING#${b.CheckInDate}#${b.BookingID}`,
+    GSI3PK: `BKSTATUS#${bookingStatus}`, GSI3SK: k,
+    ...b, BookingChannel: "Online", ProcessedByStaffID: null, Status: bookingStatus,
+    PaidAmount: 0, BalanceDue: b.TotalPrice, Version: 1, CreatedAt: now, UpdatedAt: now,
+  };
+
+  // Chỉ gắn ExpiresAt nếu là đơn Pending chờ thanh toán
+  if (!isDirectConfirm && expiresAt) {
+    bookingItem.ExpiresAt = expiresAt;
+  }
+
   const tx = [
     {
       Put: {
         TableName: TABLE,
         ConditionExpression: "attribute_not_exists(PK)",
-        Item: {
-          ...bookingKey(b.BookingID), EntityType: "Booking",
-          GSI1PK: "ROOM#" + b.RoomID, GSI1SK: k,
-          GSI2PK: "CUSTOMER#" + b.CustomerID, GSI2SK: `BOOKING#${b.CheckInDate}#${b.BookingID}`,
-          GSI3PK: "BKSTATUS#Pending", GSI3SK: k,
-          ...b, BookingChannel: "Online", ProcessedByStaffID: null, Status: "Pending",
-          PaidAmount: 0, BalanceDue: b.TotalPrice, ExpiresAt: expiresAt, Version: 1, CreatedAt: now, UpdatedAt: now,
-        },
+        Item: bookingItem,
       },
     },
     {
@@ -35,7 +45,18 @@ async function createOnlineBooking(b, { now, nowSec, expiresAt }) {
       },
     },
   ];
+
   for (const n of b.NightlyRates) {
+    const nightItem = {
+      ...nightKey(b.RoomID, n.Date), EntityType: "RoomNight",
+      GSI1PK: "NIGHT#" + n.Date, GSI1SK: `ROOMTYPE#${b.RoomTypeID}#ROOM#${b.RoomID}`,
+      RoomID: b.RoomID, RoomTypeID: b.RoomTypeID, Date: n.Date, BookingID: b.BookingID,
+      Price: n.Price, Status: nightStatus, CreatedAt: now,
+    };
+    if (!isDirectConfirm && expiresAt) {
+      nightItem.ExpiresAt = expiresAt;
+    }
+
     tx.push({
       Put: {
         TableName: TABLE,
@@ -43,15 +64,11 @@ async function createOnlineBooking(b, { now, nowSec, expiresAt }) {
         ConditionExpression: "attribute_not_exists(PK) OR (#s = :held AND ExpiresAt < :now)",
         ExpressionAttributeNames: { "#s": "Status" },
         ExpressionAttributeValues: { ":held": "Held", ":now": nowSec },
-        Item: {
-          ...nightKey(b.RoomID, n.Date), EntityType: "RoomNight",
-          GSI1PK: "NIGHT#" + n.Date, GSI1SK: `ROOMTYPE#${b.RoomTypeID}#ROOM#${b.RoomID}`,
-          RoomID: b.RoomID, RoomTypeID: b.RoomTypeID, Date: n.Date, BookingID: b.BookingID,
-          Price: n.Price, Status: "Held", ExpiresAt: expiresAt, CreatedAt: now,
-        },
+        Item: nightItem,
       },
     });
   }
+
   if (b.VoucherCode) {
     tx.push({
       Update: {
@@ -62,6 +79,7 @@ async function createOnlineBooking(b, { now, nowSec, expiresAt }) {
       },
     });
   }
+
   await ddb.send(new TransactWriteCommand({ TransactItems: tx }));
 }
 
@@ -178,6 +196,33 @@ async function cancelConfirmed(booking, { reason, refund, now }) {
   await ddb.send(new TransactWriteCommand({ TransactItems: tx }));
 }
 
+// AP8 (ghi) — Khách hàng cập nhật ghi chú đơn đặt phòng: UpdateItem PK=BOOKING#<id>, SK=METADATA
+async function updateBookingNotes(bookingId, customerId, notes, now) {
+  await ddb.send(new UpdateCommand({
+    TableName: TABLE,
+    Key: bookingKey(bookingId),
+    UpdateExpression: "SET Notes = :notes, UpdatedAt = :t ADD Version :one",
+    ConditionExpression: "attribute_exists(PK) AND CustomerID = :c AND (#s = :p OR #s = :cf)",
+    ExpressionAttributeNames: { "#s": "Status" },
+    ExpressionAttributeValues: {
+      ":notes": notes,
+      ":t": now,
+      ":one": 1,
+      ":c": customerId,
+      ":p": "Pending",
+      ":cf": "Confirmed",
+    },
+  }));
+}
+
 module.exports = {
-  CREATE_TX, createOnlineBooking, getBookingCollection, listByCustomer, listByStatus, countByStatus, confirmDeposit, cancelConfirmed,
+  CREATE_TX,
+  createOnlineBooking,
+  getBookingCollection,
+  listByCustomer,
+  listByStatus,
+  countByStatus,
+  confirmDeposit,
+  cancelConfirmed,
+  updateBookingNotes,
 };

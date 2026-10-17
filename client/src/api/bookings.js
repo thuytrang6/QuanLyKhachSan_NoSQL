@@ -7,4 +7,5 @@ export const bookingsApi = {
   detail: (id) => unwrap(http.get(`/bookings/${id}`)),
   pay: (id) => unwrap(http.post(`/bookings/${id}/pay`)),
   cancel: (id, reason) => unwrap(http.post(`/bookings/${id}/cancel`, { reason })),
+  updateNotes: (id, notes) => unwrap(http.patch(`/bookings/${id}/notes`, { notes })),
 };

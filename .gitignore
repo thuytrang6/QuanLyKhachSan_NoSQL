@@ -3,3 +3,5 @@ client/dist/
 server/.env
 *.log
 .seed.lock
+server/backups/*.json
+!server/backups/.gitkeep

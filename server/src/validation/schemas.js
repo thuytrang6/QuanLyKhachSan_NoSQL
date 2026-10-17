@@ -24,6 +24,21 @@ const register = z.object({
   }
 });
 
+const profileUpdate = z.object({
+  fullName: z.string().trim().min(2, "Họ tên tối thiểu 2 ký tự").max(100),
+  phone: z.string().trim().regex(/^\+?\d{9,15}$/, "Số điện thoại không hợp lệ"),
+  idType: z.enum(["CCCD", "Passport"], { errorMap: () => ({ message: "Loại giấy tờ là CCCD hoặc Passport" }) }),
+  idNumber: z.string().trim().min(6, "Số giấy tờ không hợp lệ").max(20),
+  gender: z.enum(["Nam", "Nữ", "Khác"]).optional(),
+  dateOfBirth: date.optional().or(z.literal("").transform(() => undefined)),
+  nationality: z.string().trim().max(50).optional(),
+  address: z.string().trim().max(200).optional(),
+}).superRefine((v, ctx) => {
+  if (v.idType === "CCCD" && !/^\d{12}$/.test(v.idNumber)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["idNumber"], message: "CCCD phải gồm 12 chữ số" });
+  }
+});
+
 const stay = {
   checkIn: date,
   checkOut: date,
@@ -59,10 +74,15 @@ const quote = z.object({
 
 const createBooking = quote.extend({
   notes: z.string().trim().max(500, "Ghi chú tối đa 500 ký tự").optional().transform((s) => s || undefined),
+  paymentMode: z.enum(["pay_at_hotel", "deposit_online"]).optional().default("pay_at_hotel"),
 });
 
 const cancelBooking = z.object({
   reason: z.string().trim().min(3, "Vui lòng nhập lý do hủy").max(300),
+});
+
+const bookingNotesUpdate = z.object({
+  notes: z.string().trim().max(500, "Ghi chú tối đa 500 ký tự"),
 });
 
 const stringList = z.array(z.string().trim().min(1).max(200)).max(20).default([]);
@@ -94,4 +114,19 @@ const roomFilter = z.object({
   pageSize: emptyToUndef(z.coerce.number().int().min(5, "Mỗi trang tối thiểu 5 phòng").max(100, "Mỗi trang tối đa 100 phòng").default(10)),
 });
 
-module.exports = { date, month, login, register, search, roomDetail, quote, createBooking, cancelBooking, roomCreate, roomUpdate, roomFilter };
+module.exports = {
+  date,
+  month,
+  login,
+  register,
+  profileUpdate,
+  search,
+  roomDetail,
+  quote,
+  createBooking,
+  cancelBooking,
+  bookingNotesUpdate,
+  roomCreate,
+  roomUpdate,
+  roomFilter,
+};

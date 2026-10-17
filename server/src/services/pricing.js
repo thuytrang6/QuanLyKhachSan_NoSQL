@@ -4,14 +4,60 @@ const { badRequest, notFound } = require("../utils/errors");
 
 const roundK = (x) => Math.round(x / 1000) * 1000;
 
-// Giá từng đêm = BasePrice × Multiplier của Rate có Priority cao nhất bao phủ đêm đó (không có Rate thì × 1)
-function priceNights(roomType, rates, nights) {
+// Danh mục ngày lễ bổ sung để nhận diện ngày lễ Việt Nam năm 2026
+const VIETNAM_HOLIDAYS_2026 = [
+  { name: "Tết Dương Lịch", start: "2026-01-01", end: "2026-01-03", multiplier: 1.25 },
+  { name: "Tết Nguyên Đán (Bính Ngọ)", start: "2026-02-14", end: "2026-02-22", multiplier: 1.3 },
+  { name: "Giỗ Tổ Hùng Vương", start: "2026-04-25", end: "2026-04-26", multiplier: 1.2 },
+  { name: "Lễ 30/4 - 1/5", start: "2026-04-29", end: "2026-05-03", multiplier: 1.25 },
+  { name: "Lễ Quốc Khánh 2/9", start: "2026-08-29", end: "2026-09-02", multiplier: 1.3 },
+  { name: "Giáng Sinh & Năm Mới", start: "2026-12-24", end: "2027-01-02", multiplier: 1.3 },
+];
+
+const CHILD_SURCHARGE_PER_NIGHT = 100000; // 100.000đ / trẻ trên 1m / đêm (trẻ dưới 1m miễn phí)
+
+// Giá từng đêm = BasePrice × Multiplier của Rate có Priority cao nhất bao phủ đêm đó (hoặc ngày lễ)
+function priceNights(roomType, rates = [], nights = []) {
   return nights.map((date) => {
-    const best = rates
+    // 1. Kiểm tra Rate từ DynamoDB (AP25)
+    const bestRate = (rates || [])
       .filter((r) => r.StartDate <= date && date <= r.EndDate)
-      .sort((a, b) => b.Priority - a.Priority)[0];
-    return { Date: date, Price: roundK(roomType.BasePrice * (best ? best.Multiplier : 1)) };
+      .sort((a, b) => (b.Priority || 0) - (a.Priority || 0))[0];
+
+    // 2. Kiểm tra ngày lễ bổ sung nếu không có Rate DB
+    const holiday = VIETNAM_HOLIDAYS_2026.find((h) => h.start <= date && date <= h.end);
+
+    let multiplier = 1;
+    let rateName = "Giá tiêu chuẩn";
+    let isHoliday = false;
+
+    if (bestRate) {
+      multiplier = bestRate.Multiplier || 1;
+      rateName = bestRate.Name || "Mùa cao điểm";
+      isHoliday = multiplier > 1;
+    } else if (holiday) {
+      multiplier = holiday.multiplier;
+      rateName = holiday.name;
+      isHoliday = true;
+    }
+
+    const price = roundK(roomType.BasePrice * multiplier);
+
+    return {
+      Date: date,
+      BasePrice: roomType.BasePrice,
+      Price: price,
+      Multiplier: multiplier,
+      RateName: rateName,
+      IsHoliday: isHoliday,
+    };
   });
+}
+
+// Tính phụ thu trẻ em: Trẻ em dưới 1m miễn phí (0đ), trẻ trên 1m phụ thu 100.000đ/đêm
+function calculateChildSurcharge(childrenOver1m, nightCount) {
+  const numChildren = Math.max(0, parseInt(childrenOver1m, 10) || 0);
+  return numChildren * CHILD_SURCHARGE_PER_NIGHT * Math.max(0, nightCount);
 }
 
 // Tải RoomType + Rate của các loại phòng cần tính (AP2 + AP25), dùng lại trong 1 request
@@ -41,11 +87,29 @@ async function applyVoucher(code, subTotal, nightCount, today) {
   return { VoucherCode: v.VoucherCode, DiscountAmount: discount, VoucherDescription: v.Description };
 }
 
-// TotalPrice = SubTotal − Discount; Deposit = TotalPrice × DepositPercent% (làm tròn nghìn); Remaining = TotalPrice − Deposit
-function totals(subTotal, discount, depositPercent) {
-  const total = subTotal - discount;
+// TotalPrice = SubTotal + ChildSurchargeTotal − Discount; Deposit = TotalPrice × DepositPercent% (làm tròn nghìn); Remaining = TotalPrice − Deposit
+function totals(subTotal, discount, depositPercent, childSurchargeAmount = 0) {
+  const childTotal = Math.max(0, childSurchargeAmount || 0);
+  const total = subTotal + childTotal - discount;
   const deposit = roundK((total * depositPercent) / 100);
-  return { SubTotal: subTotal, DiscountAmount: discount, TotalPrice: total, DepositPercent: depositPercent, DepositAmount: deposit, RemainingAmount: total - deposit };
+  return {
+    SubTotal: subTotal,
+    ChildSurchargeTotal: childTotal,
+    ChildSurchargePerNight: CHILD_SURCHARGE_PER_NIGHT,
+    DiscountAmount: discount,
+    TotalPrice: total,
+    DepositPercent: depositPercent,
+    DepositAmount: deposit,
+    RemainingAmount: total - deposit,
+  };
 }
 
-module.exports = { roundK, priceNights, loadPricingData, applyVoucher, totals };
+module.exports = {
+  roundK,
+  priceNights,
+  calculateChildSurcharge,
+  CHILD_SURCHARGE_PER_NIGHT,
+  loadPricingData,
+  applyVoucher,
+  totals,
+};
