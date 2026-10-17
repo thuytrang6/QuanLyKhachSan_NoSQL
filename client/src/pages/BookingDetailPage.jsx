@@ -59,6 +59,17 @@ export default function BookingDetailPage() {
                 <Row label="Lý do hủy">{b.CancelReason}</Row>
               </>
             )}
+            {b.Status === "Confirmed" && (
+              <Row label="Chính sách hủy">
+                {cancelPolicy.isLastMinute ? (
+                  <span className="text-amber-700 font-medium">Đặt cận ngày (không hoàn cọc)</span>
+                ) : cancelPolicy.refundable ? (
+                  <span className="text-green-700 font-medium">Hủy miễn phí trước {formatDateTime(cancelPolicy.freeCancelDeadline)}</span>
+                ) : (
+                  <span className="text-amber-700 font-medium">Đã quá hạn hủy miễn phí</span>
+                )}
+              </Row>
+            )}
           </div>
           <h3 className="mt-5 text-sm font-semibold text-slate-700">Giá từng đêm</h3>
           <div className="mt-2 grid gap-x-8 text-sm sm:grid-cols-2">
@@ -164,13 +175,51 @@ function CancelModal({ booking, policy, onClose }) {
         </>
       )}>
       <div className="space-y-4 text-sm">
-        <div className={`rounded-lg p-3 ${policy.refundable ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>
-          {policy.refundable
-            ? `Hủy trước ${formatDateTime(policy.freeCancelDeadline)} (≥ ${policy.freeCancelBeforeHours} giờ trước giờ nhận phòng): được hoàn 100% tiền cọc ${formatMoney(booking.DepositAmount)} qua chuyển khoản.`
-            : `Đã quá hạn hủy miễn phí (${formatDateTime(policy.freeCancelDeadline)}). Hủy lúc này sẽ mất tiền cọc ${formatMoney(booking.DepositAmount)}.`}
+        <div className={`rounded-xl border p-4 ${policy.isLastMinute
+            ? "border-amber-200 bg-amber-50 text-amber-900"
+            : policy.refundable
+              ? "border-green-200 bg-green-50 text-green-900"
+              : "border-amber-200 bg-amber-50 text-amber-900"
+          }`}>
+          {policy.isLastMinute ? (
+            <div className="space-y-1.5">
+              <div className="font-semibold flex items-center gap-1.5 text-amber-950">
+                <span></span> Đơn đặt cận ngày nhận phòng (không hoàn cọc)
+              </div>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Đơn được đặt khi thời gian đến lúc nhận phòng (<strong>{formatDateTime(policy.checkInDateTime)}</strong>) còn dưới {policy.freeCancelBeforeHours} giờ.
+                Theo quy định của khách sạn, đơn đặt cận ngày không áp dụng chính sách hủy hoàn cọc.
+              </p>
+              <p className="text-xs font-semibold text-amber-950">
+                Nếu hủy lúc này, bạn sẽ không được hoàn lại tiền cọc {formatMoney(booking.DepositAmount)}.
+              </p>
+            </div>
+          ) : policy.refundable ? (
+            <div className="space-y-1.5">
+              <div className="font-semibold flex items-center gap-1.5 text-green-950">
+                <span></span> Đủ điều kiện hoàn cọc 100%
+              </div>
+              <p className="text-xs text-green-800 leading-relaxed">
+                Hủy trước <strong>{formatDateTime(policy.freeCancelDeadline)}</strong> (ít nhất {policy.freeCancelBeforeHours} giờ trước giờ nhận phòng):
+                Bạn sẽ được hoàn 100% tiền cọc <strong>{formatMoney(booking.DepositAmount)}</strong> qua chuyển khoản.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="font-semibold flex items-center gap-1.5 text-amber-950">
+                <span>⚠</span> Đã quá hạn hủy miễn phí
+              </div>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Thời hạn hủy miễn phí cho đơn này đã kết thúc lúc <strong>{formatDateTime(policy.freeCancelDeadline)}</strong> ({policy.freeCancelBeforeHours} giờ trước giờ nhận phòng).
+              </p>
+              <p className="text-xs font-semibold text-amber-950">
+                Hủy lúc này bạn sẽ mất tiền cọc {formatMoney(booking.DepositAmount)}.
+              </p>
+            </div>
+          )}
         </div>
         <Field label="Lý do hủy" error={errors.reason}>
-          <textarea rows={3} className="input" {...register("reason")} />
+          <textarea rows={3} className="input" placeholder="Vui lòng cho biết lý do hủy phòng..." {...register("reason")} />
         </Field>
       </div>
     </Modal>

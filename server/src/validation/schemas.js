@@ -38,6 +38,7 @@ const roomTypeId = z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,10}$/).opt
 const search = z.object({
   ...stay,
   roomTypeId,
+  floor: emptyToUndef(z.coerce.number().int().min(1, "Tầng tối thiểu 1").max(99).optional()),
   maxPrice: emptyToUndef(z.coerce.number().int().positive("Giá tối đa phải lớn hơn 0").optional()),
   sort: emptyToUndef(z.enum(["price_asc", "price_desc", "floor"]).default("price_asc")),
 });

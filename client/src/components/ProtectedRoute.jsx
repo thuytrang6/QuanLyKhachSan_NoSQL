@@ -14,9 +14,10 @@ export default function ProtectedRoute({ role, children }) {
 
 export const homeOf = (user) => (!user ? "/" : user.role === "admin" ? "/admin" : "/");
 
-// Sau đăng nhập/đăng ký: quay lại trang đang xem (vd. chi tiết phòng) nếu đúng quyền, ngược lại về trang chính
+// Sau đăng nhập/đăng ký: quay lại trang đang xem (vd. chi tiết phòng) nếu hợp lệ, ngược lại về trang chính
 export function afterAuthPath(user, from) {
-  const allowed = from && from !== "/login" && from !== "/register"
-    && (user.role === "admin" ? from.startsWith("/admin") : !from.startsWith("/admin"));
-  return allowed ? from : homeOf(user);
+  if (!from || from === "/login" || from === "/register") return homeOf(user);
+  if (user.role === "customer" && from.startsWith("/admin")) return "/";
+  if (user.role === "admin" && (from.startsWith("/booking/") || from.startsWith("/my-bookings"))) return "/admin";
+  return from;
 }

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-// Màu nền khung thay thế theo mã loại phòng (chỉ là trang trí, không phải dữ liệu)
+// Màu nền khung thay thế theo mã loại phòng (chỉ là trang trí nếu thiếu ảnh)
 const GRADIENTS = [
   ["#fde68a", "#fdba74", "#fda4af"],
   ["#bae6fd", "#a5f3fc", "#bbf7d0"],
@@ -9,12 +9,32 @@ const GRADIENTS = [
 ];
 const hash = (s) => [...(s || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
-// Ảnh phòng lấy từ Room.Images (đường dẫn trong DB, thư mục client/public/images/rooms).
-// Nếu chưa có file ảnh thì hiển thị khung minh họa thay thế.
+const DEFAULT_TYPE_IMAGES = {
+  STD: "/images/rooms/std-1.jpg",
+  DBL: "/images/rooms/dbl-1.jpg",
+  DLX: "/images/rooms/dlx-1.jpg",
+  LUX: "/images/rooms/lux-1.jpg",
+};
+
+// Ảnh phòng lấy từ Room.Images (đường dẫn trong DB, thư mục client/public/images/rooms hoặc URL ngoài).
+// Nếu thiếu ảnh, tự động fallback theo ảnh chuẩn của loại phòng (STD, DBL, DLX, LUX).
 export default function RoomImage({ images, alt, label, typeId, className = "h-40", index = 0 }) {
   const [failed, setFailed] = useState(false);
-  const path = images && images[index];
-  const src = path ? "/" + path.replace(/^\/+/, "") : null;
+  const path = (images && images[index]) || (typeId && DEFAULT_TYPE_IMAGES[typeId]);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [path]);
+
+  let src = null;
+  if (path) {
+    if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) {
+      src = path;
+    } else {
+      src = "/" + path.replace(/^\/+/, "");
+    }
+  }
+
   if (!src || failed) {
     const [a, b, c] = GRADIENTS[hash(typeId || label) % GRADIENTS.length];
     return (

@@ -14,6 +14,7 @@ const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173", credentials: true }));
 app.use(express.json({ limit: "100kb" }));
 app.use(cookieParser());
+app.use(express.static(path.join(__dirname, "..", "..", "client", "public")));
 
 app.get("/api/health", (req, res) => res.json({ data: { ok: true } }));
 app.get("/api/hotel", (req, res, next) => require("./services/room").hotelInfo().then((data) => res.json({ data }), next));
