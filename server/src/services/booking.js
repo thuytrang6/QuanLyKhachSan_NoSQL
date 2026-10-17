@@ -45,9 +45,12 @@ async function searchRooms(q) {
   const guests = q.adults + q.childrenOver1m;
   const candidates = rooms.filter((r) =>
     (!q.roomTypeId || r.RoomTypeID === q.roomTypeId)
+    && (!q.floor || r.Floor === Number(q.floor))
     && !UNAVAILABLE_ROOM_STATUSES.includes(r.Status)
     && !taken.has(r.RoomID)
     && guests <= r.Capacity);
+
+  const allFloors = [...new Set(rooms.map((r) => Number(r.Floor)).filter((f) => Number.isInteger(f) && f > 0))].sort((a, b) => a - b);
 
   const typeIds = [...new Set(candidates.map((r) => r.RoomTypeID))];
   const priceData = await pricing.loadPricingData(typeIds);
@@ -59,6 +62,8 @@ async function searchRooms(q) {
       const prices = nightlyRates.map((n) => n.Price);
       return {
         ...clean(r),
+        Images: (r.Images && r.Images.length ? r.Images : roomType.Images) || [],
+        RoomTypeImages: roomType.Images || [],
         RoomTypeDescription: roomType.Description,
         NightlyRates: nightlyRates,
         Nights: nights.length,
@@ -77,7 +82,7 @@ async function searchRooms(q) {
   const result = priced
     .filter((r) => !q.maxPrice || r.MaxNightPrice <= q.maxPrice)
     .sort(SORTS[q.sort || "price_asc"]);
-  return { rooms: result, nights: nights.length, checkedAt: isoNow() };
+  return { rooms: result, nights: nights.length, floors: allFloors, checkedAt: isoNow() };
 }
 
 const monthStart = (ymd) => ymd.slice(0, 8) + "01";
@@ -249,12 +254,23 @@ function decorate(booking, nowSec) {
 
 // Chính sách hủy (docx 7.5): hủy trước CheckInTime ngày nhận phòng ≥ FreeCancelBeforeHours giờ thì hoàn 100% cọc
 function cancelPolicy(booking, hotel, now = new Date()) {
-  const deadline = new Date(vnDateTime(booking.CheckInDate, hotel.CheckInTime).getTime() - hotel.Policies.FreeCancelBeforeHours * 3600e3);
+  const checkInDate = booking.CheckInDate;
+  const checkInTime = hotel.CheckInTime || "14:00";
+  const checkInDateTime = vnDateTime(checkInDate, checkInTime);
+  const freeCancelBeforeHours = hotel.Policies?.FreeCancelBeforeHours ?? 48;
+  const deadline = new Date(checkInDateTime.getTime() - freeCancelBeforeHours * 3600e3);
+
+  const createdAt = booking.CreatedAt ? new Date(booking.CreatedAt) : now;
+  // Đơn được đặt khi thời gian đến check-in đã nhỏ hơn hoặc bằng freeCancelBeforeHours (đặt phòng cận ngày)
+  const isLastMinute = deadline.getTime() <= createdAt.getTime();
+
   return {
     canCancel: booking.Status === "Confirmed",
-    refundable: now <= deadline,
+    refundable: !isLastMinute && now.getTime() <= deadline.getTime(),
     freeCancelDeadline: isoNow(deadline),
-    freeCancelBeforeHours: hotel.Policies.FreeCancelBeforeHours,
+    freeCancelBeforeHours,
+    checkInDateTime: isoNow(checkInDateTime),
+    isLastMinute,
   };
 }
 

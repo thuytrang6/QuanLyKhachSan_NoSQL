@@ -5,15 +5,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { bookingsApi } from "../api/bookings";
+import { authApi } from "../api/auth";
 import { useAuth } from "../context/AuthContext";
-import { bookingFormSchema } from "../validation/schemas";
+import { bookingFormSchema, loginSchema } from "../validation/schemas";
 import { formatDate, formatMoney, todayVN, addDays } from "../utils/format";
 import Field from "./Field";
 import { Skeleton } from "./Skeleton";
 
 // Khung đặt phòng bên phải trang chi tiết. Mọi con số (giá đêm, giảm giá, cọc) do server tính.
 export default function BookingPanel({ room, stay, filters, onChange, hotel }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const today = todayVN();
 
@@ -59,9 +60,26 @@ export default function BookingPanel({ room, stay, filters, onChange, hotel }) {
         ) : !user ? (
           <GuestSummary stay={stay} hotel={hotel} loginState={{ from: location.pathname + location.search }} />
         ) : user.role !== "customer" ? (
-          <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Tài khoản quản trị không đặt phòng online. Đăng nhập bằng tài khoản khách hàng để đặt.</p>
+          <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900 space-y-2.5">
+            <div className="font-semibold flex items-center gap-1.5 text-amber-950">
+              <span>⚠</span> Tài khoản Quản trị ({user.FullName})
+            </div>
+            <p className="text-xs text-amber-800 leading-relaxed">
+              Bạn đang đăng nhập quyền {user.Role}. Hệ thống chỉ cho phép tài khoản <strong>Khách hàng</strong> đặt phòng trực tuyến.
+            </p>
+            <button
+              type="button"
+              className="btn-secondary w-full text-xs py-2 bg-white hover:bg-amber-100 border-amber-300"
+              onClick={async () => {
+                await logout();
+                toast.success("Đã đăng xuất tài khoản quản trị");
+              }}
+            >
+              Đổi sang tài khoản Khách hàng
+            </button>
+          </div>
         ) : (
-          <CustomerBooking room={room} filters={filters} />
+          <CustomerBooking room={room} filters={filters} hotel={hotel} />
         )}
       </div>
     </div>
@@ -85,17 +103,40 @@ function GuestSummary({ stay, hotel, loginState }) {
       <div className="flex justify-between border-t border-slate-100 pt-2 font-semibold">
         <span>Tổng {stay.Nights} đêm</span><span className="tabular">{formatMoney(stay.SubTotal)}</span>
       </div>
-      <p className="text-xs text-green-700">✓ Phòng còn trống trong khoảng ngày bạn chọn</p>
-      <Link to="/login" state={loginState} className="btn-primary w-full">Đăng nhập để đặt phòng</Link>
+      <div className="space-y-1">
+        <p className="text-xs text-green-700">✓ Phòng còn trống trong khoảng ngày bạn chọn</p>
+        {stay.CheckInDate && (
+          new Date(`${stay.CheckInDate}T${hotel?.CheckInTime || "14:00"}:00+07:00`).getTime() - Date.now() < (hotel?.Policies?.FreeCancelBeforeHours || 48) * 3600e3 ? (
+            <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900 leading-relaxed">
+              ⚡ <strong>Lưu ý:</strong> Ngày nhận phòng dưới 48 giờ. Đơn đặt cận ngày không áp dụng hoàn cọc khi hủy.
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500">
+              ✓ Miễn phí hủy trước 14:00 ngày {formatDate(addDays(stay.CheckInDate, -2))} (hoàn 100% cọc)
+            </p>
+          )
+        )}
+      </div>
+
+      <Link
+        to="/login"
+        state={loginState}
+        className="btn-primary w-full py-2.5 text-center font-medium block shadow-sm hover:shadow"
+      >
+        Đăng nhập để đặt phòng
+      </Link>
       <p className="text-center text-xs text-slate-500">
-        Chưa có tài khoản? <Link to="/register" state={loginState} className="text-brand-600 hover:underline">Đăng ký</Link>
+        Chưa có tài khoản?{" "}
+        <Link to="/register" state={loginState} className="font-semibold text-brand-600 hover:underline">
+          Đăng ký ngay
+        </Link>
         {hotel && ` · Cọc ${hotel.Policies.DepositPercent}% khi đặt, có thể dùng mã giảm giá`}
       </p>
     </div>
   );
 }
 
-function CustomerBooking({ room, filters }) {
+function CustomerBooking({ room, filters, hotel }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [voucher, setVoucher] = useState("");
@@ -174,6 +215,17 @@ function CustomerBooking({ room, filters }) {
             <Row label={`Đặt cọc ${q.DepositPercent}% (trả ngay)`} value={formatMoney(q.DepositAmount)} cls="font-semibold text-brand-700" />
             <Row label="Trả khi trả phòng" value={formatMoney(q.RemainingAmount)} cls="text-slate-500" />
           </div>
+          {filters.checkIn && (
+            new Date(`${filters.checkIn}T${hotel?.CheckInTime || "14:00"}:00+07:00`).getTime() - Date.now() < (hotel?.Policies?.FreeCancelBeforeHours || 48) * 3600e3 ? (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900 leading-relaxed">
+                ⚡ <strong>Đặt cận ngày:</strong> Nhận phòng trong vòng 48h ({formatDate(filters.checkIn)}), không áp dụng hủy hoàn cọc theo chính sách khách sạn.
+              </div>
+            ) : (
+              <div className="text-xs text-green-700">
+                ✓ Miễn phí hủy phòng trước 14:00 ngày {formatDate(addDays(filters.checkIn, -2))} (hoàn 100% cọc)
+              </div>
+            )
+          )}
         </>
       )}
 

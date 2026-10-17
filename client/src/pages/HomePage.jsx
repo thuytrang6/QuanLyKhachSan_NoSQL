@@ -42,11 +42,15 @@ export default function HomePage() {
   });
 
   const apply = (patch) => setSp(compact({ ...filters, ...patch }));
-  const onSubmit = (v) => apply({ ...v, maxPrice: v.maxPrice || "", roomTypeId: v.roomTypeId || "" });
+  const onSubmit = (v) => apply({ ...v, maxPrice: v.maxPrice || "", roomTypeId: v.roomTypeId || "", floor: v.floor || "" });
   const detailQuery = toQuery(stayOf(filters));
 
   // Mức giá tối đa gợi ý lấy từ giá gốc của các loại phòng trong DB
   const priceOptions = [...new Set((types.data || []).map((t) => t.BasePrice))].sort((a, b) => a - b);
+  const floorOptions = (search.data?.floors || [1, 2, 3, 4, 5])
+    .filter((f) => f != null && f !== "" && !isNaN(Number(f)))
+    .map(Number)
+    .sort((a, b) => a - b);
 
   return (
     <div>
@@ -75,35 +79,49 @@ export default function HomePage() {
 
       <div className="mx-auto -mt-16 max-w-7xl px-4 pb-12">
         {/* ---------- Bộ lọc ---------- */}
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="card relative grid gap-3 p-4 shadow-lg sm:grid-cols-2 lg:grid-cols-8">
-          <Field label="Nhận phòng" error={errors.checkIn} className="lg:col-span-1">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="card relative grid gap-2.5 p-4 sm:p-5 shadow-lg grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-[1.6fr_1.6fr_0.9fr_0.9fr_1fr_1.1fr_1.8fr_1.8fr_1.4fr] items-start">
+          <Field label="Nhận phòng" error={errors.checkIn} className="min-w-0">
             <input type="date" className="input" min={today} {...register("checkIn")} />
           </Field>
-          <Field label="Trả phòng" error={errors.checkOut} className="lg:col-span-1">
+          <Field label="Trả phòng" error={errors.checkOut} className="min-w-0">
             <input type="date" className="input" min={today} {...register("checkOut")} />
           </Field>
-          <Field label="Người lớn" error={errors.adults}>
-            <input type="number" min={1} max={10} className="input" {...register("adults")} />
+          <Field label="Người lớn" error={errors.adults} className="min-w-0">
+            <input type="number" min={1} max={10} className="input text-center" {...register("adults")} />
           </Field>
-          <Field label="Trẻ > 1m" error={errors.childrenOver1m}>
-            <input type="number" min={0} max={10} className="input" {...register("childrenOver1m")} />
+          <Field label="Trẻ > 1m" error={errors.childrenOver1m} className="min-w-0">
+            <input type="number" min={0} max={10} className="input text-center" {...register("childrenOver1m")} />
           </Field>
-          <Field label="Trẻ < 1m" error={errors.childrenUnder1m} hint="miễn phí">
-            <input type="number" min={0} max={10} className="input" {...register("childrenUnder1m")} />
+          <Field label={<span>Trẻ &lt; 1m <span className="text-[11px] font-normal text-emerald-600">(free)</span></span>} error={errors.childrenUnder1m} className="min-w-0">
+            <input type="number" min={0} max={10} className="input text-center" {...register("childrenUnder1m")} />
           </Field>
-          <Field label="Giá tối đa / đêm">
-            <select className="input" {...register("maxPrice")}>
+          <Field label="Tầng" className="min-w-0">
+            <select className="input truncate" {...register("floor")}>
+              <option value="">Tất cả tầng</option>
+              {floorOptions.map((f) => <option key={f} value={f}>Tầng {f}</option>)}
+            </select>
+          </Field>
+          <Field label="Giá tối đa / đêm" className="min-w-0">
+            <select className="input truncate" {...register("maxPrice")}>
               <option value="">Không giới hạn</option>
               {priceOptions.map((p) => <option key={p} value={p}>≤ {formatMoney(p)}</option>)}
             </select>
           </Field>
-          <Field label="Sắp xếp">
-            <select className="input" {...register("sort")}>
+          <Field label="Sắp xếp" className="min-w-0">
+            <select className="input truncate" {...register("sort")}>
               {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </Field>
-          <div className="flex items-end">
-            <button className="btn-primary w-full" disabled={search.isFetching}>{search.isFetching ? "Đang tìm..." : "Tìm phòng"}</button>
+          <div className="flex flex-col justify-end min-w-0 col-span-2 sm:col-span-1">
+            <label className="label invisible select-none mb-1 text-sm leading-5 hidden lg:block" aria-hidden>&nbsp;</label>
+            <button
+              type="submit"
+              className="btn-primary w-full h-[38px] whitespace-nowrap px-3 text-sm font-semibold shadow-sm hover:shadow active:scale-[0.99] transition flex items-center justify-center gap-1.5"
+              disabled={search.isFetching}
+            >
+              <span></span>
+              <span>{search.isFetching ? "Đang tìm..." : "Tìm phòng"}</span>
+            </button>
           </div>
           <input type="hidden" {...register("roomTypeId")} />
         </form>
@@ -173,10 +191,11 @@ function TypeChip({ active, onClick, title, sub }) {
 function RoomCard({ room, to }) {
   const shown = (room.Amenities || []).slice(0, 4);
   const more = (room.Amenities || []).length - shown.length;
+  const images = room.Images && room.Images.length ? room.Images : room.RoomTypeImages || [];
   return (
     <Link to={to} className="card group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
       <div className="relative">
-        <RoomImage images={room.Images} alt={`Phòng ${room.RoomNumber}`} label={room.RoomTypeName} typeId={room.RoomTypeID} className="h-44" />
+        <RoomImage images={images} alt={`Phòng ${room.RoomNumber}`} label={room.RoomTypeName} typeId={room.RoomTypeID} className="h-44" />
         <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-700 shadow">Phòng {room.RoomNumber}</span>
         <span className="absolute right-3 top-3 rounded-full bg-slate-900/70 px-2 py-0.5 text-xs text-white">≤ {room.Capacity} khách</span>
       </div>

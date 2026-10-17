@@ -13,6 +13,7 @@ export function readFilters(sp) {
     childrenOver1m: num(sp.get("childrenOver1m"), 0),
     childrenUnder1m: num(sp.get("childrenUnder1m"), 0),
     roomTypeId: sp.get("roomTypeId") || "",
+    floor: sp.get("floor") || "",
     maxPrice: sp.get("maxPrice") || "",
     sort: sp.get("sort") || "price_asc",
   };

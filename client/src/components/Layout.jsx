@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { useHotel } from "../hooks/useRoomTypes";
@@ -16,8 +16,12 @@ const ADMIN_LINKS = [
 export default function Layout() {
   const { user, logout } = useAuth();
   const hotel = useHotel();
+  const location = useLocation();
   const navigate = useNavigate();
   const links = !user ? GUEST_LINKS : user.role === "admin" ? ADMIN_LINKS : CUSTOMER_LINKS;
+  const currentPathWithSearch = location.pathname + location.search;
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/register";
+  const authState = isAuthPage ? undefined : { from: currentPathWithSearch };
 
   const onLogout = async () => {
     try {
@@ -59,8 +63,8 @@ export default function Layout() {
               </>
             ) : (
               <>
-                <NavLink to="/login" className="btn-ghost py-1.5">Đăng nhập</NavLink>
-                <NavLink to="/register" className="btn-primary py-1.5">Đăng ký</NavLink>
+                <NavLink to="/login" state={authState} className="btn-ghost py-1.5">Đăng nhập</NavLink>
+                <NavLink to="/register" state={authState} className="btn-primary py-1.5">Đăng ký</NavLink>
               </>
             )}
           </div>
@@ -71,7 +75,7 @@ export default function Layout() {
       </main>
       <footer className="border-t border-slate-200 bg-white px-4 py-4 text-center text-xs text-slate-500">
         {hotel.data ? `${hotel.data.HotelName} · ${hotel.data.Address}, ${hotel.data.City} · ${hotel.data.Phone}` : ""}
-        <span className="block">Dữ liệu đọc/ghi trực tiếp từ Amazon DynamoDB — bảng HotelBookingTable</span>
+
       </footer>
     </div>
   );

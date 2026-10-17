@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+* {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
 @layer components {
   .card { @apply rounded-xl border border-slate-200 bg-white shadow-sm; }
   .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50; }

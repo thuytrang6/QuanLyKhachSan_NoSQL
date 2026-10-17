@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { roomsApi } from "../api/rooms";
@@ -19,6 +19,15 @@ export default function RoomDetailPage() {
   const hotel = useHotel();
   const [picking, setPicking] = useState(false); // đang chờ chọn ngày trả trên lịch
   const [imgIndex, setImgIndex] = useState(0);
+
+  // Lưu URL trang đặt phòng hiện tại kèm các query params để nếu đăng nhập/đăng ký sẽ quay lại đúng bước này
+  useEffect(() => {
+    const currentQuery = sp.toString();
+    const currentUrl = `/rooms/${id}${currentQuery ? `?${currentQuery}` : ""}`;
+    try {
+      sessionStorage.setItem("hotel_pending_booking_url", currentUrl);
+    } catch {}
+  }, [id, sp]);
 
   const detail = useQuery({
     queryKey: ["rooms", "detail", id, stay],
@@ -126,7 +135,7 @@ export default function RoomDetailPage() {
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 <li>Nhận phòng từ {hotel.data.CheckInTime}, trả phòng trước {hotel.data.CheckOutTime}.</li>
                 <li>Đặt cọc {hotel.data.Policies.DepositPercent}% tổng tiền; phòng được giữ {hotel.data.Policies.PendingHoldMinutes} phút để thanh toán cọc.</li>
-                <li>Hủy trước {hotel.data.CheckInTime} ngày nhận phòng ít nhất {hotel.data.Policies.FreeCancelBeforeHours} giờ được hoàn 100% cọc; hủy muộn hơn mất cọc.</li>
+                <li>Hủy trước {hotel.data.CheckInTime} ngày nhận phòng ít nhất {hotel.data.Policies.FreeCancelBeforeHours} giờ được hoàn 100% cọc; đơn đặt cận ngày (&lt; {hotel.data.Policies.FreeCancelBeforeHours} giờ) hoặc hủy muộn hơn không áp dụng hoàn cọc.</li>
                 <li>Trẻ dưới {hotel.data.Policies.ChildFreeHeightCm / 100}m miễn phí và không tính vào sức chứa phòng.</li>
                 {hotel.data.Policies.VATIncluded && <li>Giá đã bao gồm VAT.</li>}
               </ul>
