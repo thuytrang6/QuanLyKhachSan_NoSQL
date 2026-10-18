@@ -37,8 +37,13 @@ export default function RoomDetailPage() {
 
   const change = (patch) => setSp(compact({ ...filters, ...patch }), { replace: true });
 
-  // Bấm lịch: lần 1 chọn ngày nhận, lần 2 (ngày sau đó) chọn ngày trả
-  const onPick = (date) => {
+  // Bấm lịch: lần 1 chọn ngày nhận, lần 2 (ngày sau đó) chọn ngày trả (hoặc truyền cả toDate khi bấm chọn dịp lễ)
+  const onPick = (date, toDate) => {
+    if (toDate && toDate > date) {
+      change({ checkIn: date, checkOut: toDate });
+      setPicking(false);
+      return;
+    }
     if (picking && date > filters.checkIn) {
       change({ checkOut: date });
       setPicking(false);
@@ -135,8 +140,8 @@ export default function RoomDetailPage() {
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 <li>Nhận phòng từ {hotel.data.CheckInTime}, trả phòng trước {hotel.data.CheckOutTime}.</li>
                 <li>Đặt cọc {hotel.data.Policies.DepositPercent}% tổng tiền; phòng được giữ {hotel.data.Policies.PendingHoldMinutes} phút để thanh toán cọc.</li>
-                <li>Hủy trước {hotel.data.CheckInTime} ngày nhận phòng ít nhất {hotel.data.Policies.FreeCancelBeforeHours} giờ được hoàn 100% cọc; đơn đặt cận ngày (&lt; {hotel.data.Policies.FreeCancelBeforeHours} giờ) hoặc hủy muộn hơn không áp dụng hoàn cọc.</li>
-                <li>Trẻ dưới {hotel.data.Policies.ChildFreeHeightCm / 100}m miễn phí và không tính vào sức chứa phòng.</li>
+                <li>Trẻ dưới {hotel.data.Policies.ChildFreeHeightCm / 100}m miễn phí và không tính vào sức chứa phòng. Trẻ trên {hotel.data.Policies.ChildFreeHeightCm / 100}m phụ thu 100.000đ/đêm.</li>
+                <li>Ngày lễ (Tết Dương lịch, Tết Nguyên Đán, Giỗ tổ Hùng Vương, 30/4 - 1/5, Quốc khánh 2/9, Giáng sinh): Phụ thu thêm 10% của giá phòng.</li>
                 {hotel.data.Policies.VATIncluded && <li>Giá đã bao gồm VAT.</li>}
               </ul>
             </section>

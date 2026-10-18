@@ -4,41 +4,80 @@ const { badRequest, notFound } = require("../utils/errors");
 
 const roundK = (x) => Math.round(x / 1000) * 1000;
 
-// Danh mục ngày lễ bổ sung để nhận diện ngày lễ Việt Nam năm 2026
+// Danh mục ngày lễ Việt Nam năm 2026: Phụ thu thêm 10% của giá phòng (multiplier = 1.10)
+const HOLIDAY_SURCHARGE_PERCENT = 10;
+const HOLIDAY_MULTIPLIER = 1.1;
+
 const VIETNAM_HOLIDAYS_2026 = [
-  { name: "Tết Dương Lịch", start: "2026-01-01", end: "2026-01-03", multiplier: 1.25 },
-  { name: "Tết Nguyên Đán (Bính Ngọ)", start: "2026-02-14", end: "2026-02-22", multiplier: 1.3 },
-  { name: "Giỗ Tổ Hùng Vương", start: "2026-04-25", end: "2026-04-26", multiplier: 1.2 },
-  { name: "Lễ 30/4 - 1/5", start: "2026-04-29", end: "2026-05-03", multiplier: 1.25 },
-  { name: "Lễ Quốc Khánh 2/9", start: "2026-08-29", end: "2026-09-02", multiplier: 1.3 },
-  { name: "Giáng Sinh & Năm Mới", start: "2026-12-24", end: "2027-01-02", multiplier: 1.3 },
+  { name: "Tết Dương Lịch", start: "2026-01-01", end: "2026-01-03", multiplier: HOLIDAY_MULTIPLIER },
+  { name: "Tết Nguyên Đán (Bính Ngọ)", start: "2026-02-14", end: "2026-02-22", multiplier: HOLIDAY_MULTIPLIER },
+  { name: "Giỗ Tổ Hùng Vương", start: "2026-04-25", end: "2026-04-26", multiplier: HOLIDAY_MULTIPLIER },
+  { name: "Lễ 30/4 - 1/5", start: "2026-04-29", end: "2026-05-03", multiplier: HOLIDAY_MULTIPLIER },
+  { name: "Lễ Quốc Khánh 2/9", start: "2026-08-29", end: "2026-09-02", multiplier: HOLIDAY_MULTIPLIER },
+  { name: "Giáng Sinh & Năm Mới", start: "2026-12-24", end: "2027-01-02", multiplier: HOLIDAY_MULTIPLIER },
 ];
+
+function findHoliday(date) {
+  return VIETNAM_HOLIDAYS_2026.find((h) => h.start <= date && date <= h.end);
+}
+
+function getHolidaysBetween(from, to) {
+  return VIETNAM_HOLIDAYS_2026.filter((h) => h.start <= to && h.end >= from);
+}
+
+function getHolidayMap(from, to) {
+  const map = {};
+  for (const h of VIETNAM_HOLIDAYS_2026) {
+    if (h.start <= to && h.end >= from) {
+      let cur = new Date(h.start > from ? h.start : from);
+      const end = new Date(h.end < to ? h.end : to);
+      while (cur <= end) {
+        const dStr = cur.toISOString().slice(0, 10);
+        map[dStr] = {
+          name: h.name,
+          surchargePercent: HOLIDAY_SURCHARGE_PERCENT,
+          multiplier: HOLIDAY_MULTIPLIER,
+        };
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+  }
+  return map;
+}
 
 const CHILD_SURCHARGE_PER_NIGHT = 100000; // 100.000đ / trẻ trên 1m / đêm (trẻ dưới 1m miễn phí)
 
-// Giá từng đêm = BasePrice × Multiplier của Rate có Priority cao nhất bao phủ đêm đó (hoặc ngày lễ)
+// Giá từng đêm: Nếu là ngày lễ thì phụ thu thêm 10% của giá phòng (Multiplier = 1.10).
+// Mùa cao điểm khác (nếu có trong Rate DB) áp dụng Multiplier của Rate đó.
 function priceNights(roomType, rates = [], nights = []) {
   return nights.map((date) => {
-    // 1. Kiểm tra Rate từ DynamoDB (AP25)
+    // 1. Kiểm tra ngày lễ Việt Nam trước (đảm bảo phụ thu đúng 10% của giá phòng)
+    const holiday = findHoliday(date);
+
+    // 2. Kiểm tra Rate từ DynamoDB (AP25)
     const bestRate = (rates || [])
       .filter((r) => r.StartDate <= date && date <= r.EndDate)
       .sort((a, b) => (b.Priority || 0) - (a.Priority || 0))[0];
-
-    // 2. Kiểm tra ngày lễ bổ sung nếu không có Rate DB
-    const holiday = VIETNAM_HOLIDAYS_2026.find((h) => h.start <= date && date <= h.end);
 
     let multiplier = 1;
     let rateName = "Giá tiêu chuẩn";
     let isHoliday = false;
 
-    if (bestRate) {
-      multiplier = bestRate.Multiplier || 1;
-      rateName = bestRate.Name || "Mùa cao điểm";
-      isHoliday = multiplier > 1;
-    } else if (holiday) {
-      multiplier = holiday.multiplier;
-      rateName = holiday.name;
+    if (holiday) {
+      multiplier = HOLIDAY_MULTIPLIER;
+      rateName = `${holiday.name} (+10%)`;
       isHoliday = true;
+    } else if (bestRate) {
+      const isRateHoliday = /lễ|tết|noel|giáng sinh|quốc khánh/i.test(bestRate.Name || "");
+      if (isRateHoliday) {
+        multiplier = HOLIDAY_MULTIPLIER;
+        rateName = `${bestRate.Name} (+10%)`;
+        isHoliday = true;
+      } else {
+        multiplier = bestRate.Multiplier || 1;
+        rateName = bestRate.Name || "Mùa cao điểm";
+        isHoliday = multiplier > 1;
+      }
     }
 
     const price = roundK(roomType.BasePrice * multiplier);
@@ -109,6 +148,11 @@ module.exports = {
   priceNights,
   calculateChildSurcharge,
   CHILD_SURCHARGE_PER_NIGHT,
+  HOLIDAY_SURCHARGE_PERCENT,
+  HOLIDAY_MULTIPLIER,
+  VIETNAM_HOLIDAYS_2026,
+  getHolidaysBetween,
+  getHolidayMap,
   loadPricingData,
   applyVoucher,
   totals,

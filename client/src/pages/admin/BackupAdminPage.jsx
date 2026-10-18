@@ -253,28 +253,6 @@ export default function BackupAdminPage() {
         )}
       </div>
 
-      {/* Guide Card for NoSQL Project */}
-      <div className="card p-5 bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
-        <div className="font-semibold text-slate-800 text-sm">
-          Hướng dẫn thi môn Dữ liệu NoSQL (Mục 6: Import/Export, Backup/Restore)
-        </div>
-        <p>
-          Trong báo cáo và thuyết trình đồ án, nhóm có thể minh họa 3 cơ chế phục hồi dữ liệu:
-        </p>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>
-            <strong>Web Application Backup/Restore (Tính năng này):</strong> Cho phép Admin xuất file JSON và nạp lại vào bảng bất kỳ lúc nào bằng BatchWriteItemCommand.
-          </li>
-          <li>
-            <strong>On-demand Backup trên DynamoDB Console:</strong> Chọn bảng &gt; Backups &gt; Create backup để tạo snapshot lưu trữ nguyên vẹn cấu trúc khóa và GSI.
-          </li>
-          <li>
-            <strong>Point-in-Time Recovery (PITR):</strong> Khôi phục trạng thái bảng tại một giây bất kỳ trong vòng 35 ngày qua để chống lại lỗi thao tác xóa nhầm.
-          </li>
-        </ul>
-      </div>
-
-      {/* Modal Confirm Restore */}
       <Modal
         open={!!confirmRestore}
         onClose={() => setConfirmRestore(null)}

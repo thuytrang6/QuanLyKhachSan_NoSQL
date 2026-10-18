@@ -116,6 +116,8 @@ async function roomDetail(roomId, q) {
   ]);
   // Chỉ trả ngày bị chiếm, không lộ BookingID của khách khác
   const takenDates = calendarNights.filter((n) => isTaken(n, nowSec)).map((n) => n.Date);
+  const holidays = pricing.getHolidaysBetween(calFrom, calTo);
+  const holidayMap = pricing.getHolidayMap(calFrom, calTo);
 
   let stay = null;
   if (q.checkIn && q.checkOut) {
@@ -157,7 +159,14 @@ async function roomDetail(roomId, q) {
       MaxExtraBed: roomType && roomType.MaxExtraBed,
       RoomTypeImages: roomType && roomType.Images,
     },
-    calendar: { from: calFrom, to: calTo, today, takenDates },
+    calendar: {
+      from: calFrom,
+      to: calTo,
+      today,
+      takenDates,
+      holidays,
+      holidayMap,
+    },
     stay,
   };
 }

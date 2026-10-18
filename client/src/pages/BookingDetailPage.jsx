@@ -88,7 +88,7 @@ export default function BookingDetailPage() {
                     <span>Đêm {formatDate(n.Date)}</span>
                     {n.IsHoliday && (
                       <span className="inline-flex items-center rounded-full bg-rose-50 px-1.5 py-0.2 text-[10px] font-semibold text-rose-700 border border-rose-200">
-                        {n.RateName || "Lễ"}
+                        🎉 {n.RateName || "Lễ (+10%)"}
                       </span>
                     )}
                   </span>
@@ -105,7 +105,10 @@ export default function BookingDetailPage() {
           <div className="mt-3 divide-y divide-slate-100">
             <Row label="Tiền phòng">{formatMoney(b.SubTotal)}</Row>
             {b.ChildSurchargeTotal > 0 && (
-              <Row label="Phụ thu trẻ em" strong>
+              <Row
+                label={`Phụ thu trẻ em (${b.NumChildrenOver1m || 0} trẻ > 1m × 100.000đ × ${b.Nights} đêm)`}
+                strong
+              >
                 <span className="text-amber-700">+{formatMoney(b.ChildSurchargeTotal)}</span>
               </Row>
             )}

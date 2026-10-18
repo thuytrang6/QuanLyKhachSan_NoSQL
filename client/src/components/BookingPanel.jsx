@@ -21,8 +21,20 @@ export default function BookingPanel({ room, stay, filters, onChange, hotel }) {
   const setDate = (k) => (e) => {
     const v = e.target.value;
     if (!v) return;
-    if (k === "checkIn" && v >= filters.checkOut) onChange({ checkIn: v, checkOut: addDays(v, 1) });
-    else onChange({ [k]: v });
+    if (k === "checkIn") {
+      if (v >= filters.checkOut) {
+        onChange({ checkIn: v, checkOut: addDays(v, 1) });
+      } else {
+        onChange({ checkIn: v });
+      }
+    } else if (k === "checkOut") {
+      if (v <= filters.checkIn) {
+        toast.error("Ngày trả phòng phải sau ngày nhận phòng ít nhất 1 đêm");
+        onChange({ checkOut: addDays(filters.checkIn, 1) });
+      } else {
+        onChange({ checkOut: v });
+      }
+    }
   };
   const setNum = (k) => (e) => onChange({ [k]: e.target.value });
 
@@ -33,12 +45,25 @@ export default function BookingPanel({ room, stay, filters, onChange, hotel }) {
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Field label="Nhận phòng"><input type="date" className="input" min={today} value={filters.checkIn} onChange={setDate("checkIn")} /></Field>
-        <Field label="Trả phòng"><input type="date" className="input" min={addDays(filters.checkIn, 1)} value={filters.checkOut} onChange={setDate("checkOut")} /></Field>
+        <Field label="Trả phòng"><input type="date" className="input" min={addDays(filters.checkIn || today, 1)} value={filters.checkOut} onChange={setDate("checkOut")} /></Field>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <Field label="Người lớn"><input type="number" min={1} max={10} className="input" value={filters.adults} onChange={setNum("adults")} /></Field>
-        <Field label="Trẻ > 1m (Phụ thu)"><input type="number" min={0} max={10} className="input" value={filters.childrenOver1m} onChange={setNum("childrenOver1m")} /></Field>
-        <Field label="Trẻ < 1m (Miễn phí)"><input type="number" min={0} max={10} className="input" value={filters.childrenUnder1m} onChange={setNum("childrenUnder1m")} /></Field>
+      <div className="mt-3 grid grid-cols-3 gap-2 items-end">
+        <div className="flex flex-col justify-end">
+          <label className="label h-9 flex items-end pb-1 text-xs sm:text-sm font-medium text-slate-700">Người lớn</label>
+          <input type="number" min={1} max={10} className="input text-center px-1" value={filters.adults} onChange={setNum("adults")} />
+        </div>
+        <div className="flex flex-col justify-end">
+          <label className="label h-9 flex items-end pb-1 text-xs font-medium text-slate-700 leading-tight">
+            <span>Trẻ &gt; 1m <span className="text-[11px] font-semibold text-amber-600 whitespace-nowrap">(+100k)</span></span>
+          </label>
+          <input type="number" min={0} max={10} className="input text-center px-1" value={filters.childrenOver1m} onChange={setNum("childrenOver1m")} />
+        </div>
+        <div className="flex flex-col justify-end">
+          <label className="label h-9 flex items-end pb-1 text-xs font-medium text-slate-700 leading-tight">
+            <span>Trẻ &lt; 1m <span className="text-[11px] font-semibold text-emerald-600 whitespace-nowrap">(0đ)</span></span>
+          </label>
+          <input type="number" min={0} max={10} className="input text-center px-1" value={filters.childrenUnder1m} onChange={setNum("childrenUnder1m")} />
+        </div>
       </div>
 
       <div className="mt-4 border-t border-slate-100 pt-4">
@@ -58,7 +83,7 @@ export default function BookingPanel({ room, stay, filters, onChange, hotel }) {
             </Link>
           </div>
         ) : !user ? (
-          <GuestSummary stay={stay} hotel={hotel} loginState={{ from: location.pathname + location.search }} />
+          <GuestSummary stay={stay} hotel={hotel} filters={filters} loginState={{ from: location.pathname + location.search }} />
         ) : user.role !== "customer" ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900 space-y-2.5">
             <div className="font-semibold text-amber-950">
@@ -91,11 +116,11 @@ function NightList({ nightlyRates }) {
     <ul className="space-y-1.5 text-sm">
       {nightlyRates.map((n) => (
         <li key={n.Date} className="flex items-center justify-between text-slate-600">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span>Đêm {formatDate(n.Date)}</span>
             {n.IsHoliday && (
               <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 border border-rose-200" title={n.RateName}>
-                {n.RateName} (x{n.Multiplier})
+                🎉 {n.RateName}
               </span>
             )}
           </div>
@@ -106,18 +131,34 @@ function NightList({ nightlyRates }) {
   );
 }
 
-function GuestSummary({ stay, hotel, loginState }) {
+function GuestSummary({ stay, hotel, filters, loginState }) {
+  const childTotal = stay.ChildSurchargeTotal || 0;
+  const estimatedTotal = stay.EstimatedTotal || (stay.SubTotal + childTotal);
+
   return (
     <div className="space-y-3">
       <NightList nightlyRates={stay.NightlyRates} />
-      <div className="flex justify-between border-t border-slate-100 pt-2 font-semibold">
-        <span>Tổng {stay.Nights} đêm</span><span className="tabular">{formatMoney(stay.SubTotal)}</span>
-      </div>
-      {stay.ChildSurchargeTotal > 0 && (
-        <div className="flex justify-between text-xs text-amber-700">
-          <span>Phụ thu trẻ em</span><span className="tabular font-medium">+{formatMoney(stay.ChildSurchargeTotal)}</span>
+      <div className="divide-y divide-slate-100 border-t border-slate-100 text-sm">
+        <div className="flex justify-between py-1.5 text-slate-600">
+          <span>Tiền phòng ({stay.Nights} đêm)</span>
+          <span className="tabular font-medium">{formatMoney(stay.SubTotal)}</span>
         </div>
-      )}
+        {childTotal > 0 && (
+          <div className="flex justify-between py-1.5 text-amber-700 font-medium">
+            <span>Phụ thu trẻ em ({filters.childrenOver1m} trẻ &gt; 1m × 100.000đ × {stay.Nights} đêm)</span>
+            <span className="tabular">+{formatMoney(childTotal)}</span>
+          </div>
+        )}
+        {Number(filters.childrenUnder1m) > 0 && (
+          <div className="py-1 text-xs text-emerald-700">
+            {filters.childrenUnder1m} trẻ em dưới 1m: Miễn phí lưu trú
+          </div>
+        )}
+        <div className="flex justify-between py-1.5 font-bold text-slate-900 text-base">
+          <span>Tổng tiền dự kiến</span>
+          <span className="tabular text-brand-700">{formatMoney(estimatedTotal)}</span>
+        </div>
+      </div>
       <div className="space-y-1">
         <p className="text-xs text-green-700">Phòng còn trống trong khoảng ngày bạn chọn</p>
         {stay.CheckInDate && (
@@ -233,7 +274,7 @@ function CustomerBooking({ room, filters, hotel }) {
             <Row label={`Tiền phòng (${q.Nights} đêm)`} value={formatMoney(q.SubTotal)} />
             {q.ChildSurchargeTotal > 0 && (
               <Row
-                label={`Phụ thu trẻ em (${filters.childrenOver1m} trẻ > 1m × ${q.Nights} đêm)`}
+                label={`Phụ thu trẻ em (${filters.childrenOver1m} trẻ > 1m × 100.000đ × ${q.Nights} đêm)`}
                 value={`+${formatMoney(q.ChildSurchargeTotal)}`}
                 cls="text-amber-700 font-medium"
               />

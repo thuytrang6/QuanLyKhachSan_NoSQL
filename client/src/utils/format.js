@@ -19,6 +19,14 @@ export function formatDate(ymd) {
   return `${d}/${m}/${y}`;
 }
 
+// "2026-09-25" -> "25/09"
+export function formatDateShort(ymd) {
+  if (!ymd) return "—";
+  const parts = ymd.slice(0, 10).split("-");
+  if (parts.length >= 3) return `${parts[2]}/${parts[1]}`;
+  return ymd;
+}
+
 // ISO UTC -> "25/09/2026 14:20" giờ Việt Nam
 export function formatDateTime(iso) {
   if (!iso) return "—";

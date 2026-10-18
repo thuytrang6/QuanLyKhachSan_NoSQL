@@ -98,8 +98,9 @@ Dữ liệu mẫu lấy mốc **24/09/2026**. Trên dashboard có nút **"Dùng 
      - Trẻ em trên 1m: Phụ thu **100.000đ / trẻ / đêm**.
      - Tổng phụ thu trẻ em: `ChildSurchargeTotal = childrenOver1m × 100.000 × số_đêm`.
    - **Ngày lễ**:
-     - Tự động nhận diện các ngày lễ lớn trong năm 2026 (Tết Dương lịch, Giỗ tổ Hùng Vương, 30/4 - 1/5, Quốc khánh 2/9, Giáng sinh...) và kết hợp với item `Rate` trong DynamoDB (`Multiplier > 1`).
-     - Giao diện hiển thị trực quan huy hiệu lễ (ví dụ: `🎉 Lễ Quốc khánh 2/9 (x1.3)`).
+     - Tự động nhận diện các ngày lễ lớn trong năm 2026 (Tết Dương lịch, Tết Nguyên Đán, Giỗ tổ Hùng Vương, 30/4 - 1/5, Quốc khánh 2/9, Giáng sinh...): **Phụ thu thêm 10% của giá phòng** (hệ số `Multiplier = 1.10`).
+     - Trên lịch (`AvailabilityCalendar`): Note trực quan các ngày lễ với badge 🎉, viền nổi bật, tooltip tên ngày lễ & mức phụ thu 10%, kèm khung thông báo danh sách ngày lễ trong tháng.
+     - Giao diện đặt phòng hiển thị chi tiết phụ thu từng đêm lễ (ví dụ: `🎉 Lễ Quốc khánh 2/9 (+10%)`).
 2. **Đặt phòng không cần thanh toán**:
    - Khách có thể chọn tùy chọn: **"Xác nhận đặt phòng (Thanh toán tại khách sạn)"**.
    - Đơn lập tức chuyển trạng thái `Confirmed`, các đêm phòng chuyển thành `Booked`, không bị hủy tự động sau 15 phút.

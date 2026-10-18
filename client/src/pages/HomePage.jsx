@@ -6,7 +6,8 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { roomsApi } from "../api/rooms";
 import { useHotel, useRoomTypes } from "../hooks/useRoomTypes";
 import { searchSchema } from "../validation/schemas";
-import { formatDate, formatMoney, formatNumber, todayVN } from "../utils/format";
+import toast from "react-hot-toast";
+import { addDays, formatDate, formatMoney, formatNumber, todayVN } from "../utils/format";
 import { compact, readFilters, stayOf, toQuery } from "../utils/stay";
 import Field from "../components/Field";
 import RoomImage from "../components/RoomImage";
@@ -26,10 +27,30 @@ export default function HomePage() {
   const hotel = useHotel();
   const today = todayVN();
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(searchSchema),
     defaultValues: filters,
   });
+  const checkInVal = watch("checkIn");
+  const checkOutVal = watch("checkOut");
+
+  const onCheckInChange = (e) => {
+    const v = e.target.value;
+    if (!v) return;
+    setValue("checkIn", v);
+    if (v >= checkOutVal) setValue("checkOut", addDays(v, 1));
+  };
+
+  const onCheckOutChange = (e) => {
+    const v = e.target.value;
+    if (!v) return;
+    if (v <= checkInVal) {
+      toast.error("Ngày trả phòng phải sau ngày nhận phòng ít nhất 1 đêm");
+      setValue("checkOut", addDays(checkInVal, 1));
+    } else {
+      setValue("checkOut", v);
+    }
+  };
   // Bộ lọc đổi từ bên ngoài form (bấm chip loại phòng, nút Back) -> đồng bộ lại form
   const key = sp.toString();
   useEffect(() => { reset(readFilters(sp)); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -79,47 +100,45 @@ export default function HomePage() {
 
       <div className="mx-auto -mt-16 max-w-7xl px-4 pb-12">
         {/* ---------- Bộ lọc ---------- */}
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="card relative grid gap-2.5 p-4 sm:p-5 shadow-lg grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-[1.6fr_1.6fr_0.9fr_0.9fr_1fr_1.1fr_1.8fr_1.8fr_1.4fr] items-start">
-          <Field label="Nhận phòng" error={errors.checkIn} className="min-w-0">
-            <input type="date" className="input" min={today} {...register("checkIn")} />
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="card relative grid gap-2.5 p-4 sm:p-5 shadow-lg grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-[1.5fr_1.5fr_0.9fr_1.1fr_1.1fr_1fr_1.4fr_1.4fr_1.2fr] items-end">
+          <Field label={<span className="h-8 flex items-end pb-1 text-xs sm:text-sm font-medium text-slate-700">Nhận phòng</span>} error={errors.checkIn} className="min-w-0">
+            <input type="date" className="input" min={today} {...register("checkIn", { onChange: onCheckInChange })} />
           </Field>
-          <Field label="Trả phòng" error={errors.checkOut} className="min-w-0">
-            <input type="date" className="input" min={today} {...register("checkOut")} />
+          <Field label={<span className="h-8 flex items-end pb-1 text-xs sm:text-sm font-medium text-slate-700">Trả phòng</span>} error={errors.checkOut} className="min-w-0">
+            <input type="date" className="input" min={addDays(checkInVal || today, 1)} {...register("checkOut", { onChange: onCheckOutChange })} />
           </Field>
-          <Field label="Người lớn" error={errors.adults} className="min-w-0">
-            <input type="number" min={1} max={10} className="input text-center" {...register("adults")} />
+          <Field label={<span className="h-8 flex items-end pb-1 text-xs sm:text-sm font-medium text-slate-700">Người lớn</span>} error={errors.adults} className="min-w-0">
+            <input type="number" min={1} max={10} className="input text-center px-1" {...register("adults")} />
           </Field>
-          <Field label="Trẻ > 1m" error={errors.childrenOver1m} className="min-w-0">
-            <input type="number" min={0} max={10} className="input text-center" {...register("childrenOver1m")} />
+          <Field label={<span className="h-8 flex items-end pb-1 text-xs font-medium text-slate-700 leading-tight whitespace-nowrap">Trẻ &gt; 1m <span className="ml-1 text-[11px] font-semibold text-amber-600">(+100k)</span></span>} error={errors.childrenOver1m} className="min-w-0">
+            <input type="number" min={0} max={10} className="input text-center px-1" {...register("childrenOver1m")} />
           </Field>
-          <Field label={<span>Trẻ &lt; 1m <span className="text-[11px] font-normal text-emerald-600">(free)</span></span>} error={errors.childrenUnder1m} className="min-w-0">
-            <input type="number" min={0} max={10} className="input text-center" {...register("childrenUnder1m")} />
+          <Field label={<span className="h-8 flex items-end pb-1 text-xs font-medium text-slate-700 leading-tight whitespace-nowrap">Trẻ &lt; 1m <span className="ml-1 text-[11px] font-semibold text-emerald-600">(0đ)</span></span>} error={errors.childrenUnder1m} className="min-w-0">
+            <input type="number" min={0} max={10} className="input text-center px-1" {...register("childrenUnder1m")} />
           </Field>
-          <Field label="Tầng" className="min-w-0">
+          <Field label={<span className="h-8 flex items-end pb-1 text-xs sm:text-sm font-medium text-slate-700">Tầng</span>} className="min-w-0">
             <select className="input truncate" {...register("floor")}>
               <option value="">Tất cả tầng</option>
               {floorOptions.map((f) => <option key={f} value={f}>Tầng {f}</option>)}
             </select>
           </Field>
-          <Field label="Giá tối đa / đêm" className="min-w-0">
+          <Field label={<span className="h-8 flex items-end pb-1 text-xs sm:text-sm font-medium text-slate-700">Giá tối đa / đêm</span>} className="min-w-0">
             <select className="input truncate" {...register("maxPrice")}>
               <option value="">Không giới hạn</option>
               {priceOptions.map((p) => <option key={p} value={p}>Tối đa {formatMoney(p)}</option>)}
             </select>
           </Field>
-          <Field label="Sắp xếp" className="min-w-0">
+          <Field label={<span className="h-8 flex items-end pb-1 text-xs sm:text-sm font-medium text-slate-700">Sắp xếp</span>} className="min-w-0">
             <select className="input truncate" {...register("sort")}>
               {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </Field>
           <div className="flex flex-col justify-end min-w-0 col-span-2 sm:col-span-1">
-            <label className="label invisible select-none mb-1 text-sm leading-5 hidden lg:block" aria-hidden>&nbsp;</label>
             <button
               type="submit"
               className="btn-primary w-full h-[38px] whitespace-nowrap px-3 text-sm font-semibold shadow-sm hover:shadow active:scale-[0.99] transition flex items-center justify-center gap-1.5"
               disabled={search.isFetching}
             >
-              <span></span>
               <span>{search.isFetching ? "Đang tìm..." : "Tìm phòng"}</span>
             </button>
           </div>
@@ -199,8 +218,8 @@ function RoomCard({ room, to }) {
         <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-700 shadow">Phòng {room.RoomNumber}</span>
         <span className="absolute right-3 top-3 rounded-full bg-slate-900/70 px-2 py-0.5 text-xs text-white">Tối đa {room.Capacity} khách</span>
         {room.HasHoliday && (
-          <span className="absolute bottom-3 left-3 rounded-full bg-rose-600/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow backdrop-blur">
-            Mùa Lễ / Cao điểm
+          <span className="absolute bottom-3 left-3 rounded-full bg-rose-600/95 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow backdrop-blur flex items-center gap-1">
+            <span>🎉</span> Dịp Lễ (+10% giá phòng)
           </span>
         )}
       </div>
@@ -220,7 +239,11 @@ function RoomCard({ room, to }) {
             <div className="text-lg font-bold text-brand-700">{formatMoney(room.MinNightPrice)}</div>
             <div className="text-xs text-slate-500">
               Tổng {room.Nights} đêm: <span className="tabular font-medium text-slate-700">{formatMoney(room.EstimatedTotal || room.SubTotal)}</span>
-              {room.ChildSurchargeTotal > 0 && <span className="text-amber-700 ml-1">(gồm phụ thu trẻ em)</span>}
+              {room.ChildSurchargeTotal > 0 && (
+                <span className="text-amber-700 block text-[11px] font-medium">
+                  (Gồm phụ thu trẻ em: +{formatMoney(room.ChildSurchargeTotal)})
+                </span>
+              )}
             </div>
           </div>
           <span className="text-sm font-medium text-brand-600 group-hover:underline">Xem chi tiết</span>
