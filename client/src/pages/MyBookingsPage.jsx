@@ -17,14 +17,14 @@ export default function MyBookingsPage() {
         {list.isLoading && <div className="card"><TableSkeleton cols={6} /></div>}
         {list.isError && <ErrorState error={list.error} onRetry={list.refetch} />}
         {list.data && list.data.length === 0 && (
-          <EmptyState icon="🧳" title="Bạn chưa có đơn đặt phòng nào" action={<Link to="/" className="btn-primary">Tìm phòng</Link>} />
+          <EmptyState title="Bạn chưa có đơn đặt phòng nào" action={<Link to="/" className="btn-primary">Tìm phòng</Link>} />
         )}
         {list.data && list.data.length > 0 && (
           <div className="card overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="th">Mã đơn</th><th className="th">Phòng</th><th className="th">Nhận → Trả</th>
+                  <th className="th">Mã đơn</th><th className="th">Phòng</th><th className="th">Nhận - Trả</th>
                   <th className="th text-right">Tổng tiền</th><th className="th">Trạng thái</th><th className="th" />
                 </tr>
               </thead>
@@ -33,7 +33,7 @@ export default function MyBookingsPage() {
                   <tr key={b.BookingID} className="hover:bg-slate-50">
                     <td className="td font-medium">{b.BookingID}</td>
                     <td className="td">{b.RoomID} · {b.RoomTypeName}</td>
-                    <td className="td whitespace-nowrap">{formatDate(b.CheckInDate)} → {formatDate(b.CheckOutDate)}</td>
+                    <td className="td whitespace-nowrap">{formatDate(b.CheckInDate)} - {formatDate(b.CheckOutDate)}</td>
                     <td className="td tabular text-right">{formatMoney(b.TotalPrice)}</td>
                     <td className="td"><BookingStatusBadge status={b.Status} expired={b.IsExpired} /></td>
                     <td className="td whitespace-nowrap text-right">

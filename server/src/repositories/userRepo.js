@@ -1,4 +1,4 @@
-const { GetCommand, QueryCommand, TransactWriteCommand } = require("@aws-sdk/lib-dynamodb");
+const { GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const { ddb, TABLE } = require("../config/db");
 
 // AP11 — Đăng nhập khách hàng / nhân viên: GSI2 GSI2PK=EMAIL#<email>, GSI2SK=PROFILE
@@ -48,4 +48,29 @@ async function createCustomer(customer, now) {
   }));
 }
 
-module.exports = { findByEmail, emailExists, createCustomer };
+// AP11 (ghi) — Sửa thông tin cá nhân: UpdateItem PK=CUSTOMER#<id>, SK=PROFILE
+async function updateCustomer(customerId, fields, now) {
+  const names = { "#t": "UpdatedAt" };
+  const values = { ":t": now };
+  const sets = ["#t = :t"];
+
+  const ALLOWED = ["FullName", "Phone", "IDType", "IDNumber", "DateOfBirth", "Gender", "Nationality", "Address"];
+  ALLOWED.forEach((k, i) => {
+    if (fields[k] !== undefined) {
+      names[`#f${i}`] = k;
+      values[`:f${i}`] = fields[k];
+      sets.push(`#f${i} = :f${i}`);
+    }
+  });
+
+  await ddb.send(new UpdateCommand({
+    TableName: TABLE,
+    Key: { PK: "CUSTOMER#" + customerId, SK: "PROFILE" },
+    UpdateExpression: "SET " + sets.join(", "),
+    ConditionExpression: "attribute_exists(PK)",
+    ExpressionAttributeNames: names,
+    ExpressionAttributeValues: values,
+  }));
+}
+
+module.exports = { findByEmail, emailExists, createCustomer, updateCustomer };

@@ -47,9 +47,8 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-slate-500">Khách hàng đặt phòng hoặc quản lý khách sạn.</p>
 
         {from && from.startsWith("/rooms/") && (
-          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/70 p-3 text-xs text-brand-900 flex items-center gap-2">
-            <span className="text-base">🏨</span>
-            <span>Đăng nhập để tiếp tục hoàn tất đơn đặt phòng đang chọn của bạn.</span>
+          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/70 p-3 text-xs text-brand-900">
+            Đăng nhập để tiếp tục hoàn tất đơn đặt phòng đang chọn của bạn.
           </div>
         )}
         <form className="mt-6 space-y-4" onSubmit={handleSubmit((v) => login.mutate(v))} noValidate>

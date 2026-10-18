@@ -12,7 +12,7 @@ export default function RoomLogsPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <Link to="/admin/rooms" className="text-sm text-brand-600 hover:underline">← Quản lý phòng</Link>
+      <Link to="/admin/rooms" className="text-sm text-brand-600 hover:underline">Quản lý phòng</Link>
       <h1 className="mt-2 text-2xl font-semibold">Nhật ký trạng thái phòng {id}</h1>
       <p className="text-sm text-slate-500">Query PK=ROOM#{id}, begins_with(SK, LOG#), mới nhất trước.</p>
 
@@ -28,7 +28,7 @@ export default function RoomLogsPage() {
             <div><span className="text-slate-500">Version:</span> {q.data.room.Version}</div>
           </div>
           {q.data.logs.length === 0 ? (
-            <div className="mt-5"><EmptyState icon="📋" title="Chưa có lần đổi trạng thái nào" /></div>
+            <div className="mt-5"><EmptyState title="Chưa có lần đổi trạng thái nào" /></div>
           ) : (
             <div className="card mt-5 overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-100">

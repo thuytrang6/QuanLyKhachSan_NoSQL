@@ -14,8 +14,8 @@ import EmptyState, { ErrorState } from "../components/EmptyState";
 import { CardGridSkeleton, Skeleton } from "../components/Skeleton";
 
 const SORT_OPTIONS = [
-  { value: "price_asc", label: "Giá thấp → cao" },
-  { value: "price_desc", label: "Giá cao → thấp" },
+  { value: "price_asc", label: "Giá thấp đến cao" },
+  { value: "price_desc", label: "Giá cao đến thấp" },
   { value: "floor", label: "Theo tầng" },
 ];
 
@@ -63,7 +63,7 @@ export default function HomePage() {
             <div className="space-y-3"><Skeleton className="h-10 w-72 bg-white/30" /><Skeleton className="h-5 w-96 bg-white/30" /></div>
           ) : hotel.data && (
             <>
-              <div className="text-sm font-medium text-white/80">{"★".repeat(hotel.data.StarRating)} · {hotel.data.City}</div>
+              <div className="text-sm font-medium text-white/80">{hotel.data.StarRating} sao · {hotel.data.City}</div>
               <h1 className="mt-1 text-3xl font-bold sm:text-4xl">{hotel.data.HotelName}</h1>
               <p className="mt-2 max-w-2xl text-white/90">{hotel.data.Address}, {hotel.data.City}</p>
               <div className="mt-5 flex flex-wrap gap-3 text-sm">
@@ -104,7 +104,7 @@ export default function HomePage() {
           <Field label="Giá tối đa / đêm" className="min-w-0">
             <select className="input truncate" {...register("maxPrice")}>
               <option value="">Không giới hạn</option>
-              {priceOptions.map((p) => <option key={p} value={p}>≤ {formatMoney(p)}</option>)}
+              {priceOptions.map((p) => <option key={p} value={p}>Tối đa {formatMoney(p)}</option>)}
             </select>
           </Field>
           <Field label="Sắp xếp" className="min-w-0">
@@ -134,7 +134,7 @@ export default function HomePage() {
             {types.isLoading && [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
             {(types.data || []).map((t) => (
               <TypeChip key={t.RoomTypeID} active={filters.roomTypeId === t.RoomTypeID} onClick={() => apply({ roomTypeId: t.RoomTypeID })}
-                title={t.Name} sub={`từ ${formatMoney(t.BasePrice)}/đêm · ≤ ${t.Capacity} khách`} />
+                title={t.Name} sub={`từ ${formatMoney(t.BasePrice)}/đêm · Tối đa ${t.Capacity} khách`} />
             ))}
           </div>
         </section>
@@ -145,7 +145,7 @@ export default function HomePage() {
             <h2 className="text-lg font-semibold">Phòng còn trống</h2>
             {search.data && (
               <span className="text-sm text-slate-600">
-                <b>{search.data.rooms.length}</b> phòng · {formatDate(filters.checkIn)} → {formatDate(filters.checkOut)} ({search.data.nights} đêm)
+                <b>{search.data.rooms.length}</b> phòng · {formatDate(filters.checkIn)} đến {formatDate(filters.checkOut)} ({search.data.nights} đêm)
                 {search.isFetching && <span className="ml-2 text-xs text-slate-400">Đang cập nhật...</span>}
               </span>
             )}
@@ -153,7 +153,7 @@ export default function HomePage() {
           {search.isLoading && <CardGridSkeleton count={8} />}
           {search.isError && <ErrorState error={search.error} onRetry={search.refetch} />}
           {search.data && search.data.rooms.length === 0 && (
-            <EmptyState icon="🛏️" title="Không còn phòng phù hợp" description="Thử đổi ngày, hạng phòng, mức giá hoặc giảm số khách."
+            <EmptyState title="Không còn phòng phù hợp" description="Thử đổi ngày, hạng phòng, mức giá hoặc giảm số khách."
               action={<button className="btn-secondary" onClick={() => setSp({})}>Xóa bộ lọc</button>} />
           )}
           {search.data && search.data.rooms.length > 0 && (
@@ -197,7 +197,12 @@ function RoomCard({ room, to }) {
       <div className="relative">
         <RoomImage images={images} alt={`Phòng ${room.RoomNumber}`} label={room.RoomTypeName} typeId={room.RoomTypeID} className="h-44" />
         <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-700 shadow">Phòng {room.RoomNumber}</span>
-        <span className="absolute right-3 top-3 rounded-full bg-slate-900/70 px-2 py-0.5 text-xs text-white">≤ {room.Capacity} khách</span>
+        <span className="absolute right-3 top-3 rounded-full bg-slate-900/70 px-2 py-0.5 text-xs text-white">Tối đa {room.Capacity} khách</span>
+        {room.HasHoliday && (
+          <span className="absolute bottom-3 left-3 rounded-full bg-rose-600/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow backdrop-blur">
+            Mùa Lễ / Cao điểm
+          </span>
+        )}
       </div>
       <div className="flex flex-1 flex-col p-4">
         <h3 className="font-semibold text-slate-900 group-hover:text-brand-700">{room.RoomTypeName}</h3>
@@ -213,9 +218,12 @@ function RoomCard({ room, to }) {
           <div>
             <div className="text-xs text-slate-500">{room.MinNightPrice === room.MaxNightPrice ? "Giá mỗi đêm" : "Từ"}</div>
             <div className="text-lg font-bold text-brand-700">{formatMoney(room.MinNightPrice)}</div>
-            <div className="text-xs text-slate-500">Tổng {room.Nights} đêm: <span className="tabular font-medium text-slate-700">{formatMoney(room.SubTotal)}</span></div>
+            <div className="text-xs text-slate-500">
+              Tổng {room.Nights} đêm: <span className="tabular font-medium text-slate-700">{formatMoney(room.EstimatedTotal || room.SubTotal)}</span>
+              {room.ChildSurchargeTotal > 0 && <span className="text-amber-700 ml-1">(gồm phụ thu trẻ em)</span>}
+            </div>
           </div>
-          <span className="text-sm font-medium text-brand-600 group-hover:underline">Xem chi tiết →</span>
+          <span className="text-sm font-medium text-brand-600 group-hover:underline">Xem chi tiết</span>
         </div>
       </div>
     </Link>

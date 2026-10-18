@@ -53,9 +53,8 @@ export default function RegisterPage() {
         <p className="mt-1 text-sm text-slate-500">Dùng để đặt phòng online và theo dõi lịch sử đặt phòng.</p>
 
         {from && from.startsWith("/rooms/") && (
-          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/70 p-3 text-xs text-brand-900 flex items-center gap-2">
-            <span className="text-base">🏨</span>
-            <span>Đăng ký tài khoản để tiếp tục hoàn tất đơn đặt phòng đang chọn của bạn.</span>
+          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/70 p-3 text-xs text-brand-900">
+            Đăng ký tài khoản để tiếp tục hoàn tất đơn đặt phòng đang chọn của bạn.
           </div>
         )}
         <form className="mt-6 grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit((v) => signup.mutate(v))} noValidate>

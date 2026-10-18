@@ -13,7 +13,7 @@ export default function Modal({ open, onClose, title, children, footer, size = "
       <div className={`card w-full ${size} my-auto`} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <button className="btn-ghost px-2 py-1" onClick={onClose} aria-label="Đóng">✕</button>
+          <button className="btn-ghost px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-800" onClick={onClose}>Đóng</button>
         </div>
         <div className="px-5 py-4">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">{footer}</div>}

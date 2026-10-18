@@ -23,8 +23,7 @@ async function getHotelPolicies() {
 }
 
 function validateStay({ checkIn, checkOut }) {
-  const today = vnDate();
-  if (checkIn < today) throw badRequest("Ngày nhận phòng không được ở quá khứ");
+  if (checkIn < "2026-01-01") throw badRequest("Ngày nhận phòng không hợp lệ");
   if (checkOut <= checkIn) throw badRequest("Ngày trả phòng phải sau ngày nhận phòng");
   const nights = nightsBetween(checkIn, checkOut);
   if (nights.length > MAX_NIGHTS) throw badRequest(`Mỗi lần đặt tối đa ${MAX_NIGHTS} đêm`);
@@ -54,12 +53,17 @@ async function searchRooms(q) {
 
   const typeIds = [...new Set(candidates.map((r) => r.RoomTypeID))];
   const priceData = await pricing.loadPricingData(typeIds);
+  const childSurcharge = pricing.calculateChildSurcharge(q.childrenOver1m, nights.length);
+
   const priced = candidates
     .filter((r) => priceData[r.RoomTypeID])
     .map((r) => {
       const { roomType, rates } = priceData[r.RoomTypeID];
       const nightlyRates = pricing.priceNights(roomType, rates, nights);
       const prices = nightlyRates.map((n) => n.Price);
+      const roomSubTotal = prices.reduce((s, p) => s + p, 0);
+      const totalEstimated = roomSubTotal + childSurcharge;
+
       return {
         ...clean(r),
         Images: (r.Images && r.Images.length ? r.Images : roomType.Images) || [],
@@ -67,16 +71,21 @@ async function searchRooms(q) {
         RoomTypeDescription: roomType.Description,
         NightlyRates: nightlyRates,
         Nights: nights.length,
-        SubTotal: prices.reduce((s, p) => s + p, 0),
+        SubTotal: roomSubTotal,
+        ChildSurchargeTotal: childSurcharge,
+        ChildSurchargePerNight: pricing.CHILD_SURCHARGE_PER_NIGHT,
+        EstimatedTotal: totalEstimated,
         MinNightPrice: Math.min(...prices),
         MaxNightPrice: Math.max(...prices),
+        HasHoliday: nightlyRates.some((n) => n.IsHoliday),
       };
     });
+
   // Lọc theo giá tối đa mỗi đêm và sắp xếp ở server (frontend không tự lọc/tính giá)
   const byRoom = (a, b) => a.RoomID.localeCompare(b.RoomID, undefined, { numeric: true });
   const SORTS = {
-    price_asc: (a, b) => a.SubTotal - b.SubTotal || byRoom(a, b),
-    price_desc: (a, b) => b.SubTotal - a.SubTotal || byRoom(a, b),
+    price_asc: (a, b) => a.EstimatedTotal - b.EstimatedTotal || byRoom(a, b),
+    price_desc: (a, b) => b.EstimatedTotal - a.EstimatedTotal || byRoom(a, b),
     floor: (a, b) => a.Floor - b.Floor || byRoom(a, b),
   };
   const result = priced
@@ -123,9 +132,16 @@ async function roomDetail(roomId, q) {
       if (UNAVAILABLE_ROOM_STATUSES.includes(room.Status)) reasons.push("Phòng đang tạm ngừng nhận khách (bảo trì hoặc ngừng khai thác)");
       if (conflicts.length) reasons.push(`Phòng đã có khách đặt ${conflicts.length} đêm trong khoảng này`);
       if (q.adults + q.childrenOver1m > room.Capacity) reasons.push(`Phòng chỉ chứa tối đa ${room.Capacity} khách (người lớn + trẻ trên 1m)`);
+      const childSurcharge = pricing.calculateChildSurcharge(q.childrenOver1m, nights.length);
+      const subTotal = nightlyRates.reduce((s, n) => s + n.Price, 0);
+
       stay = {
         CheckInDate: q.checkIn, CheckOutDate: q.checkOut, Nights: nights.length,
-        NightlyRates: nightlyRates, SubTotal: nightlyRates.reduce((s, n) => s + n.Price, 0),
+        NightlyRates: nightlyRates,
+        SubTotal: subTotal,
+        ChildSurchargeTotal: childSurcharge,
+        ChildSurchargePerNight: pricing.CHILD_SURCHARGE_PER_NIGHT,
+        EstimatedTotal: subTotal + childSurcharge,
         ConflictDates: conflicts, Available: reasons.length === 0, Reasons: reasons,
       };
     } catch (e) {
@@ -161,15 +177,24 @@ async function buildQuote(input) {
 
   const nightlyRates = pricing.priceNights(roomType, rates, nights);
   const subTotal = nightlyRates.reduce((s, n) => s + n.Price, 0);
+  const childSurcharge = pricing.calculateChildSurcharge(input.childrenOver1m, nights.length);
+
   let voucher = null;
-  if (input.voucherCode) voucher = await pricing.applyVoucher(input.voucherCode, subTotal, nights.length, vnDate());
-  const money = pricing.totals(subTotal, voucher ? voucher.DiscountAmount : 0, hotel.Policies.DepositPercent);
+  if (input.voucherCode) voucher = await pricing.applyVoucher(input.voucherCode, subTotal + childSurcharge, nights.length, vnDate());
+  const money = pricing.totals(subTotal, voucher ? voucher.DiscountAmount : 0, hotel.Policies.DepositPercent, childSurcharge);
+
   return {
     room, roomType, hotel, nights, nightlyRates, voucher,
     quote: {
       RoomID: room.RoomID, RoomTypeID: room.RoomTypeID, RoomTypeName: room.RoomTypeName,
       CheckInDate: input.checkIn, CheckOutDate: input.checkOut, Nights: nights.length,
-      NightlyRates: nightlyRates, ...money,
+      NightlyRates: nightlyRates,
+      NumAdults: input.adults,
+      NumChildrenOver1m: input.childrenOver1m || 0,
+      NumChildrenUnder1m: input.childrenUnder1m || 0,
+      ChildSurchargeTotal: childSurcharge,
+      ChildSurchargePerNight: pricing.CHILD_SURCHARGE_PER_NIGHT,
+      ...money,
       VoucherCode: voucher ? voucher.VoucherCode : undefined,
       VoucherDescription: voucher ? voucher.VoucherDescription : undefined,
       PendingHoldMinutes: hotel.Policies.PendingHoldMinutes,
@@ -181,7 +206,8 @@ async function quote(input) {
   return (await buildQuote(input)).quote;
 }
 
-// Đặt phòng online (docx 13.4): Put Booking Pending + RoomNight Held + Update Voucher trong 1 TransactWrite
+// Đặt phòng online (docx 13.4): Put Booking + RoomNight + Update Voucher trong 1 TransactWrite
+// Hỗ trợ "K làm thanh toán" (paymentMode !== 'deposit_online'): đặt thành công Confirmed trực tiếp!
 async function createBooking(user, input) {
   const { room, nights, nightlyRates, voucher, hotel, quote: q } = await buildQuote(input);
   const nowSec = epochSec();
@@ -195,6 +221,7 @@ async function createBooking(user, input) {
   const customer = await userRepo.findByEmail(user.email);
   if (!customer || customer.EntityType !== "Customer") throw forbidden("Chỉ khách hàng mới được đặt phòng online");
 
+  const isDirectConfirm = input.paymentMode !== "deposit_online";
   const bookingId = await counters.nextBookingId();
   const now = isoNow();
   const expiresAt = nowSec + hotel.Policies.PendingHoldMinutes * 60;
@@ -204,6 +231,7 @@ async function createBooking(user, input) {
     RoomID: room.RoomID, RoomTypeID: room.RoomTypeID, RoomTypeName: room.RoomTypeName,
     CheckInDate: input.checkIn, CheckOutDate: input.checkOut, Nights: nights.length,
     NumAdults: input.adults, NumChildrenOver1m: input.childrenOver1m, NumChildrenUnder1m: input.childrenUnder1m,
+    ChildSurchargeTotal: q.ChildSurchargeTotal || 0,
     NightlyRates: nightlyRates,
     SubTotal: q.SubTotal, DiscountAmount: q.DiscountAmount, TotalPrice: q.TotalPrice,
     DepositPercent: q.DepositPercent, DepositAmount: q.DepositAmount, RemainingAmount: q.RemainingAmount,
@@ -213,7 +241,7 @@ async function createBooking(user, input) {
   };
 
   try {
-    await bookingRepo.createOnlineBooking(booking, { now, nowSec, expiresAt });
+    await bookingRepo.createOnlineBooking(booking, { now, nowSec, expiresAt, isDirectConfirm });
   } catch (e) {
     if (!isTxCanceled(e)) throw e;
     const failed = failedIndexes(e);
@@ -224,7 +252,12 @@ async function createBooking(user, input) {
     if (failed.includes(bookingRepo.CREATE_TX.ROOM)) throw conflict(`Phòng ${room.RoomID} vừa ngừng khai thác, vui lòng chọn phòng khác`, "ROOM_TAKEN");
     throw conflict("Phòng vừa được người khác đặt, vui lòng chọn phòng khác", "ROOM_TAKEN");
   }
-  return { BookingID: bookingId, ExpiresAt: expiresAt, Status: "Pending" };
+  return {
+    BookingID: bookingId,
+    ExpiresAt: isDirectConfirm ? null : expiresAt,
+    Status: isDirectConfirm ? "Confirmed" : "Pending",
+    isDirectConfirm,
+  };
 }
 
 // Đọc hồ sơ booking (AP8) và tách theo EntityType
@@ -345,4 +378,25 @@ async function cancelBooking(user, bookingId, reason) {
   return { BookingID: bookingId, Status: "Cancelled", RefundAmount: refund ? refund.Amount : 0 };
 }
 
-module.exports = { searchRooms, roomDetail, quote, createBooking, getBookingDetail, listMyBookings, payDeposit, cancelBooking };
+// Khách hàng sửa ghi chú của đơn đặt phòng
+async function updateNotes(user, bookingId, notes) {
+  const { booking } = await loadBooking(bookingId);
+  assertOwner(user, booking);
+  if (!["Pending", "Confirmed"].includes(booking.Status)) {
+    throw conflict(`Không thể sửa ghi chú khi đơn ở trạng thái ${booking.Status}`);
+  }
+  await bookingRepo.updateBookingNotes(bookingId, user.id, notes, isoNow());
+  return { BookingID: bookingId, Notes: notes };
+}
+
+module.exports = {
+  searchRooms,
+  roomDetail,
+  quote,
+  createBooking,
+  getBookingDetail,
+  listMyBookings,
+  payDeposit,
+  cancelBooking,
+  updateNotes,
+};

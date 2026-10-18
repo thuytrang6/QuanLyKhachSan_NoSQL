@@ -34,4 +34,8 @@ router.post("/:id/cancel", bookingIdParam, validate(S.cancelBooking), asyncHandl
   res.json({ data: await bookingService.cancelBooking(req.user, req.params.id, req.valid.reason) });
 }));
 
+router.patch("/:id/notes", bookingIdParam, validate(S.bookingNotesUpdate), asyncHandler(async (req, res) => {
+  res.json({ data: await bookingService.updateNotes(req.user, req.params.id, req.valid.notes) });
+}));
+
 module.exports = router;

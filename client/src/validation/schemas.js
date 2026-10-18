@@ -22,6 +22,21 @@ export const registerSchema = z.object({
   if (v.idType === "CCCD" && !/^\d{12}$/.test(v.idNumber)) ctx.addIssue({ code: "custom", path: ["idNumber"], message: "CCCD phải gồm 12 chữ số" });
 });
 
+export const profileSchema = z.object({
+  fullName: z.string().trim().min(2, "Họ tên tối thiểu 2 ký tự").max(100),
+  phone: z.string().trim().regex(/^\+?\d{9,15}$/, "Số điện thoại không hợp lệ"),
+  idType: z.enum(["CCCD", "Passport"]),
+  idNumber: z.string().trim().min(6, "Số giấy tờ không hợp lệ").max(20),
+  gender: z.enum(["Nam", "Nữ", "Khác"]).optional(),
+  dateOfBirth: z.string().optional(),
+  nationality: z.string().trim().max(50).optional(),
+  address: z.string().trim().max(200).optional(),
+}).superRefine((v, ctx) => {
+  if (v.idType === "CCCD" && !/^\d{12}$/.test(v.idNumber)) {
+    ctx.addIssue({ code: "custom", path: ["idNumber"], message: "CCCD phải gồm 12 chữ số" });
+  }
+});
+
 export const searchSchema = z.object({
   checkIn: date,
   checkOut: date,
@@ -37,10 +52,15 @@ export const searchSchema = z.object({
 export const bookingFormSchema = z.object({
   voucherCode: z.string().trim().toUpperCase().regex(/^([A-Z0-9]{3,20})?$/, "Mã giảm giá không hợp lệ"),
   notes: z.string().trim().max(500, "Ghi chú tối đa 500 ký tự"),
+  paymentMode: z.enum(["pay_at_hotel", "deposit_online"]).optional(),
 });
 
 export const cancelSchema = z.object({
   reason: z.string().trim().min(3, "Vui lòng nhập lý do hủy").max(300),
+});
+
+export const bookingNotesSchema = z.object({
+  notes: z.string().trim().max(500, "Ghi chú tối đa 500 ký tự"),
 });
 
 const listText = z.string().max(2000);

@@ -86,7 +86,7 @@ export default function RoomsAdminPage() {
 
       <div className="card mt-5 overflow-x-auto">
         {rooms.isLoading ? <TableSkeleton cols={7} rows={10} /> : rooms.isError ? <div className="p-4"><ErrorState error={rooms.error} onRetry={rooms.refetch} /></div> :
-          data.total === 0 ? <div className="p-4"><EmptyState icon="🏨" title="Không có phòng phù hợp bộ lọc" /></div> : (
+          data.total === 0 ? <div className="p-4"><EmptyState title="Không có phòng phù hợp bộ lọc" /></div> : (
             <>
             <table className={`min-w-full divide-y divide-slate-100 ${rooms.isPlaceholderData ? "opacity-60" : ""}`}>
               <thead className="bg-slate-50">
@@ -99,7 +99,7 @@ export default function RoomsAdminPage() {
                 {data.items.map((r) => (
                   <tr key={r.RoomID} className="hover:bg-slate-50">
                     <td className="td"><div className="font-semibold">{r.RoomNumber}</div><div className="text-xs text-slate-500">Tầng {r.Floor} · v{r.Version}</div></td>
-                    <td className="td">{r.RoomTypeName}<div className="text-xs text-slate-500">{r.BedType} · {r.AreaM2} m² · ≤{r.Capacity} khách</div></td>
+                    <td className="td">{r.RoomTypeName}<div className="text-xs text-slate-500">{r.BedType} · {r.AreaM2} m² · Tối đa {r.Capacity} khách</div></td>
                     <td className="td">{r.View}</td>
                     <td className="td tabular text-right">{formatMoney(r.BasePrice)}</td>
                     <td className="td">
@@ -161,7 +161,7 @@ function CreateRoomModal({ types, onClose }) {
         </Field>
         {type && (
           <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 sm:col-span-2">
-            Sao chép từ RoomType: {type.Name} · giá gốc {formatMoney(type.BasePrice)} · ≤{type.Capacity} khách · {type.BedType} · {type.AreaM2} m²
+            Sao chép từ RoomType: {type.Name} · giá gốc {formatMoney(type.BasePrice)} · Tối đa {type.Capacity} khách · {type.BedType} · {type.AreaM2} m²
           </div>
         )}
         <Field label="Hướng nhìn (View)" error={errors.View} className="sm:col-span-2"><input className="input" {...register("View")} /></Field>

@@ -10,9 +10,11 @@ import RoomDetailPage from "./pages/RoomDetailPage";
 import PaymentPage from "./pages/PaymentPage";
 import MyBookingsPage from "./pages/MyBookingsPage";
 import BookingDetailPage from "./pages/BookingDetailPage";
+import ProfilePage from "./pages/ProfilePage";
 import DashboardPage from "./pages/admin/DashboardPage";
 import RoomsAdminPage from "./pages/admin/RoomsAdminPage";
 import RoomLogsPage from "./pages/admin/RoomLogsPage";
+import BackupAdminPage from "./pages/admin/BackupAdminPage";
 import { ForbiddenPage, NotFoundPage } from "./pages/ErrorPages";
 
 function Home() {
@@ -39,10 +41,12 @@ export default function App() {
         <Route path="/booking/:id/pay" element={customer(<PaymentPage />)} />
         <Route path="/my-bookings" element={customer(<MyBookingsPage />)} />
         <Route path="/my-bookings/:id" element={customer(<BookingDetailPage />)} />
+        <Route path="/profile" element={customer(<ProfilePage />)} />
 
         <Route path="/admin" element={admin(<DashboardPage />)} />
         <Route path="/admin/rooms" element={admin(<RoomsAdminPage />)} />
         <Route path="/admin/rooms/:id/logs" element={admin(<RoomLogsPage />)} />
+        <Route path="/admin/backup" element={admin(<BackupAdminPage />)} />
 
         <Route path="/403" element={<ForbiddenPage />} />
         <Route path="*" element={<NotFoundPage />} />

@@ -24,4 +24,8 @@ router.get("/me", requireAuth, asyncHandler(async (req, res) => {
   res.json({ data: await authService.me(req.user) });
 }));
 
+router.put("/me", requireAuth, validate(S.profileUpdate), asyncHandler(async (req, res) => {
+  res.json({ data: await authService.updateProfile(req.user, req.valid) });
+}));
+
 module.exports = router;

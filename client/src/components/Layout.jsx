@@ -7,10 +7,12 @@ const GUEST_LINKS = [{ to: "/", label: "Trang chủ", end: true }];
 const CUSTOMER_LINKS = [
   { to: "/", label: "Trang chủ", end: true },
   { to: "/my-bookings", label: "Đơn của tôi" },
+  { to: "/profile", label: "Tài khoản" },
 ];
 const ADMIN_LINKS = [
   { to: "/admin", label: "Dashboard", end: true },
   { to: "/admin/rooms", label: "Quản lý phòng" },
+  { to: "/admin/backup", label: "Sao lưu & Phục hồi" },
 ];
 
 export default function Layout() {
@@ -39,13 +41,13 @@ export default function Layout() {
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <Link to="/" className="flex items-center gap-2 font-semibold text-slate-900">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 text-white" aria-hidden>☀</span>
-            <span>{hotel.data ? hotel.data.HotelName : "Khách sạn"}</span>
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 text-white font-bold text-xs">SH</span>
+            <span>{hotel.data ? hotel.data.HotelName : "Sunrise Hotel"}</span>
           </Link>
           <nav className="flex gap-1">
             {links.map((l) => (
               <NavLink key={l.to} to={l.to} end={l.end}
-                className={({ isActive }) => `rounded-lg px-3 py-1.5 text-sm font-medium ${isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}>
+                className={({ isActive }) => `rounded-lg px-3 py-1.5 text-sm font-medium ${isActive ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-100"}`}>
                 {l.label}
               </NavLink>
             ))}
@@ -53,12 +55,16 @@ export default function Layout() {
           <div className="ml-auto flex items-center gap-3">
             {user ? (
               <>
-                <div className="text-right text-sm leading-tight">
-                  <div className="font-medium text-slate-800">{user.FullName}</div>
+                <Link
+                  to={user.role === "admin" ? "/admin" : "/profile"}
+                  className="text-right text-sm leading-tight hover:opacity-80 transition-opacity"
+                  title="Xem thông tin tài khoản"
+                >
+                  <div className="font-semibold text-slate-800 hover:text-brand-600">{user.FullName}</div>
                   <div className="text-xs text-slate-500">
                     {user.role === "admin" ? `${user.Role} · ${user.StaffID}` : `Khách hàng · ${user.CustomerID}`}
                   </div>
-                </div>
+                </Link>
                 <button className="btn-secondary py-1.5" onClick={onLogout}>Đăng xuất</button>
               </>
             ) : (
@@ -75,7 +81,6 @@ export default function Layout() {
       </main>
       <footer className="border-t border-slate-200 bg-white px-4 py-4 text-center text-xs text-slate-500">
         {hotel.data ? `${hotel.data.HotelName} · ${hotel.data.Address}, ${hotel.data.City} · ${hotel.data.Phone}` : ""}
-
       </footer>
     </div>
   );

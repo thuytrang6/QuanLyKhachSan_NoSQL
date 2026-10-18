@@ -63,7 +63,7 @@ export default function RoomDetailPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <Link to={`/?${sp.toString()}`} className="text-sm text-brand-600 hover:underline">← Quay lại danh sách phòng</Link>
+      <Link to={`/?${sp.toString()}`} className="text-sm text-brand-600 hover:underline">Quay lại danh sách phòng</Link>
 
       <div className="mt-3 grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -105,7 +105,7 @@ export default function RoomDetailPage() {
               <>
                 <h2 className="mt-5 font-semibold">Tiện nghi trong phòng</h2>
                 <ul className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-700 sm:grid-cols-3">
-                  {room.Amenities.map((a) => <li key={a} className="flex items-center gap-2"><span className="text-brand-500">✓</span>{a}</li>)}
+                  {room.Amenities.map((a) => <li key={a} className="rounded bg-slate-50 px-2 py-1 text-slate-700">{a}</li>)}
                 </ul>
               </>
             )}
