@@ -21,4 +21,6 @@ export const adminApi = {
   restoreSeed: () => unwrap(http.post("/admin/restore-seed")),
   restoreUpload: (jsonData) => unwrap(http.post("/admin/restore-upload", jsonData)),
   deleteBackup: (filename) => unwrap(http.delete(`/admin/backups/${filename}`)),
+  getBackupSchedule: () => unwrap(http.get("/admin/backup-schedule")),
+  updateBackupSchedule: (body) => unwrap(http.post("/admin/backup-schedule", body)),
 };

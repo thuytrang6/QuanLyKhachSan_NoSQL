@@ -72,6 +72,13 @@ router.post("/restore-upload",
 router.delete("/backups/:filename",
   asyncHandler(async (req, res) => res.json({ data: await backupService.deleteBackup(req.params.filename) })));
 
+const backupSchedule = require("../services/backupSchedule");
+router.get("/backup-schedule",
+  asyncHandler(async (req, res) => res.json({ data: backupSchedule.getSchedule() })));
+
+router.post("/backup-schedule",
+  asyncHandler(async (req, res) => res.json({ data: backupSchedule.updateSchedule(req.body) })));
+
 router.get("/backups/:filename/download", (req, res) => {
   const filename = req.params.filename;
   if (!/^[\w.-]+$/.test(filename)) return res.status(400).json({ error: { message: "Tên file không hợp lệ" } });

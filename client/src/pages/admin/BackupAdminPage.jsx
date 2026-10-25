@@ -7,17 +7,53 @@ import Modal from "../../components/Modal";
 import { TableSkeleton } from "../../components/Skeleton";
 import EmptyState, { ErrorState } from "../../components/EmptyState";
 
+// Cùng công thức với server/src/services/backupSchedule.js: mốc 02:00 Chủ nhật giờ Việt Nam
+const SCHEDULE_ANCHOR_MS = Date.parse("2026-01-04T02:00:00+07:00");
+const WEEKDAYS = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+
+function computeNextRunAt(frequencyHours, from = Date.now()) {
+  const period = frequencyHours * 3600 * 1000;
+  const k = Math.floor((from - SCHEDULE_ANCHOR_MS) / period) + 1;
+  return new Date(SCHEDULE_ANCHOR_MS + k * period).toISOString();
+}
+
+// Thứ trong tuần theo giờ Việt Nam (UTC+7)
+const weekdayVN = (iso) => WEEKDAYS[new Date(Date.parse(iso) + 7 * 3600 * 1000).getUTCDay()];
+
 export default function BackupAdminPage() {
   const qc = useQueryClient();
   const [confirmRestore, setConfirmRestore] = useState(null); // filename to restore
   const [confirmDelete, setConfirmDelete] = useState(null); // filename to delete
   const [confirmResetSeed, setConfirmResetSeed] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [scheduleEnabled, setScheduleEnabled] = useState(null);
+  const [frequencyHours, setFrequencyHours] = useState(null);
 
   const backups = useQuery({
     queryKey: ["admin", "backups"],
     queryFn: adminApi.listBackups,
   });
+
+  const schedule = useQuery({
+    queryKey: ["admin", "backup-schedule"],
+    queryFn: adminApi.getBackupSchedule,
+  });
+
+  const updateScheduleMutation = useMutation({
+    mutationFn: (body) => adminApi.updateBackupSchedule(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "backup-schedule"] });
+      toast.success("Đã cập nhật lịch sao lưu tự động thành công!");
+    },
+    onError: (e) => toast.error(e.message || "Cập nhật lịch thất bại"),
+  });
+
+  const currentEnabled = scheduleEnabled !== null ? scheduleEnabled : (schedule.data?.enabled ?? true);
+  const currentFrequency = frequencyHours !== null ? frequencyHours : (schedule.data?.frequencyHours ?? 168);
+  // Đang chọn khác lịch đã lưu thì xem trước lần chạy kế tiếp theo lựa chọn mới
+  const isScheduleDirty = Boolean(schedule.data) &&
+    (currentEnabled !== schedule.data.enabled || currentFrequency !== schedule.data.frequencyHours);
+  const nextRunAt = isScheduleDirty ? computeNextRunAt(currentFrequency) : schedule.data?.nextRunAt;
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["admin", "backups"] });
@@ -82,12 +118,33 @@ export default function BackupAdminPage() {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const json = JSON.parse(evt.target.result);
-        const res = await adminApi.restoreUpload(json);
+        const text = evt.target.result;
+        let payload;
+        try {
+          payload = JSON.parse(text);
+        } catch (parseErr) {
+          // Thử parse dạng JSON Lines (mỗi dòng 1 item như HotelBookingTable.json)
+          const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+          const items = [];
+          for (const line of lines) {
+            try {
+              const p = JSON.parse(line);
+              items.push(p.Item || p);
+            } catch { }
+          }
+          if (items.length > 0) {
+            payload = { items };
+          } else {
+            throw parseErr;
+          }
+        }
+
+        const res = await adminApi.restoreUpload(payload);
         invalidateAll();
         toast.success(res.message || "Đã khôi phục từ file tải lên thành công!");
       } catch (err) {
-        toast.error("File JSON không hợp lệ: " + (err.message || "Lỗi định dạng"));
+        const msg = err.response?.data?.error?.message || err.message || "Lỗi định dạng";
+        toast.error("Khôi phục thất bại: " + msg);
       } finally {
         setUploading(false);
         e.target.value = "";
@@ -171,6 +228,97 @@ export default function BackupAdminPage() {
           >
             Khôi phục mốc gốc
           </button>
+        </div>
+      </div>
+
+      {/* Cấu hình sao lưu tự động theo lịch */}
+      <div className="card p-5 border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-slate-50">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Sao lưu tự động theo lịch (Automated Schedule)</h2>
+              <p className="text-xs text-slate-500">
+                Tiến trình chạy nền tự động quét DynamoDB và tạo bản sao lưu định kỳ theo giờ đã cấu hình.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {schedule.data?.enabled ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Đang bật tự động
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                Đang tạm ngưng
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-slate-700">Trạng thái tiến trình</label>
+            <select
+              className="input mt-1 text-sm"
+              value={currentEnabled ? "true" : "false"}
+              onChange={(e) => setScheduleEnabled(e.target.value === "true")}
+            >
+              <option value="true">Bật sao lưu tự động</option>
+              <option value="false">Tắt / Tạm ngưng</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700">Chu kỳ / Tần suất</label>
+            <select
+              className="input mt-1 text-sm"
+              value={currentFrequency}
+              onChange={(e) => setFrequencyHours(Number(e.target.value))}
+            >
+              <option value={6}>Mỗi 6 giờ </option>
+              <option value={12}>Mỗi 12 giờ </option>
+              <option value={24}>Hàng ngày (02:00)</option>
+              <option value={168}>Hàng tuần (02:00 Chủ nhật - Khuyên dùng)</option>
+            </select>
+          </div>
+
+          <div className="text-xs text-slate-600 space-y-1 sm:col-span-1">
+            <div>
+              <span className="text-slate-400">Lần chạy gần nhất:</span>{" "}
+              <strong>{schedule.data?.lastRunAt ? formatDateTime(schedule.data.lastRunAt) : "Chưa có"}</strong>
+            </div>
+            <div>
+              <span className="text-slate-400">Lần chạy kế tiếp:</span>{" "}
+              {!currentEnabled ? (
+                <strong className="text-slate-500">Không chạy (đang tắt)</strong>
+              ) : nextRunAt ? (
+                <>
+                  <strong className="text-brand-700">{weekdayVN(nextRunAt)}, {formatDateTime(nextRunAt)}</strong>
+                  {isScheduleDirty && <span className="text-slate-400"> (sau khi áp dụng)</span>}
+                </>
+              ) : (
+                <strong className="text-brand-700">Đang tính...</strong>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              className="btn-primary w-full sm:w-auto text-xs py-2 px-4 shadow-sm"
+              disabled={updateScheduleMutation.isPending}
+              onClick={() => {
+                updateScheduleMutation.mutate({
+                  enabled: currentEnabled,
+                  frequencyHours: currentFrequency,
+                });
+              }}
+            >
+              {updateScheduleMutation.isPending ? "Đang lưu..." : "Áp dụng lịch"}
+            </button>
+          </div>
         </div>
       </div>
 

@@ -118,3 +118,11 @@ Dữ liệu mẫu lấy mốc **24/09/2026**. Trên dashboard có nút **"Dùng 
    - Mỗi đêm phòng là một item `RoomNight` độc lập, kiểm tra điều kiện trong `TransactWriteCommand`.
    - Đổi Status của Room/Booking luôn cập nhật cùng lúc: `Status`, `GSI3PK`, `UpdatedAt` và `ADD Version 1`.
 
+## Hướng dẫn Query DynamoDB
+```
+node query-db.js room 501
+node query-db.js booking BK002317
+node query-db.js nights 501
+node query-db.js check-deleted 999
+node query-db.js hotel
+```

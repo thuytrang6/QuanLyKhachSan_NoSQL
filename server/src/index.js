@@ -12,7 +12,8 @@ if (!process.env.JWT_SECRET) {
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173", credentials: true }));
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ limit: "100mb", extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "..", "..", "client", "public")));
 
@@ -28,4 +29,5 @@ app.use(errorHandler);
 const port = Number(process.env.PORT) || 4000;
 app.listen(port, () => {
   console.log(`API chạy tại http://localhost:${port} — bảng ${process.env.TABLE} @ ${process.env.DDB_ENDPOINT || "AWS " + process.env.AWS_REGION}`);
+  require("./services/backupSchedule").initScheduler();
 });

@@ -32,16 +32,28 @@ async function scanAllItems() {
   return items;
 }
 
-// Ghi lô items vào DynamoDB
+function formatItemForPut(rawItem) {
+  const item = (rawItem && rawItem.Item) ? rawItem.Item : rawItem;
+  const isMarshalled = item && typeof item === "object" && item.PK && typeof item.PK === "object" && (item.PK.S || item.PK.N);
+  if (isMarshalled) {
+    return item;
+  }
+  return marshall(item, { removeUndefinedValues: true });
+}
+
+// Ghi lô items vào DynamoDB (chạy song song các batch để tối ưu tốc độ)
 async function batchWriteItems(items) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const BATCH_SIZE = 25;
-
+  const chunks = [];
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
-    const chunk = items.slice(i, i + BATCH_SIZE);
+    chunks.push(items.slice(i, i + BATCH_SIZE));
+  }
+
+  async function writeChunk(chunk) {
     let requests = chunk.map((item) => ({
       PutRequest: {
-        Item: item.M ? item : marshall(item, { removeUndefinedValues: true }),
+        Item: formatItemForPut(item),
       },
     }));
 
@@ -54,6 +66,10 @@ async function batchWriteItems(items) {
         await sleep(Math.min(2000, 100 * 2 ** attempt));
       }
     }
+  }
+
+  for (let i = 0; i < chunks.length; i += 10) {
+    await Promise.all(chunks.slice(i, i + 10).map(writeChunk));
   }
 }
 

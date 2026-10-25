@@ -139,9 +139,22 @@ async function restoreFromUploadedJson(data) {
     items = data;
   } else if (data && Array.isArray(data.items)) {
     items = data.items;
+  } else if (data && Array.isArray(data.Items)) {
+    items = data.Items;
+  } else if (typeof data === "string") {
+    const lines = data.split("\n").map((l) => l.trim()).filter(Boolean);
+    for (const l of lines) {
+      try {
+        const p = JSON.parse(l);
+        items.push(p.Item || p);
+      } catch {}
+    }
   } else {
-    throw badRequest("Dữ liệu JSON không đúng định dạng chứa mảng items");
+    throw badRequest("Dữ liệu JSON không đúng định dạng chứa danh sách items");
   }
+
+  // Chuẩn hóa unwrap nếu bên trong là { Item: ... }
+  items = items.map((it) => (it && it.Item ? it.Item : it));
 
   if (items.length === 0) {
     throw badRequest("File sao lưu không chứa item nào");
