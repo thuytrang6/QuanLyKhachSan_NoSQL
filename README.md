@@ -126,3 +126,38 @@ node query-db.js nights 501
 node query-db.js check-deleted 999
 node query-db.js hotel
 ```
+## PartiQL
+### Tra cứu phòng theo số phòng
+select*from "HotelBookingTable" where "PK" ='hotel#main' and "SK"='Room#888'
+### Thêm phòng
+INSERT INTO "HotelBookingTable" VALUE {
+  'PK': 'HOTEL#MAIN',
+  'SK': 'ROOM#888',
+  'EntityType': 'Room',
+  'RoomID': '888',
+  'RoomNumber': '888',
+  'Floor': 8,
+  'RoomTypeID': 'DLX',
+  'RoomTypeName': 'Phòng Deluxe',
+  'BasePrice': 1500000,
+  'Capacity': 3,
+  'Status': 'Available',
+  'GSI3PK': 'ROOMSTATUS#Available',
+  'GSI3SK': 'FLOOR#08#ROOM#888',
+  'Version': 1
+}
+### Xóa phòng
+DELETE FROM "HotelBookingTable" WHERE "PK" = 'HOTEL#MAIN' AND "SK" = 'ROOM#888'
+### Xem chi tiết đơn hàng và trạng thái cọc theo mã BKxxxxx
+SELECT * FROM "HotelBookingTable" WHERE "PK" = 'BOOKING#BK002322' AND "SK" = 'METADATA'
+ 
+ "Status": Confirmed (Đơn đã được xác nhận).
+"DepositAmount": 300000 (Số tiền cọc 20%).
+"PaidAmount": 300000 (Số tiền thực tế khách đã cọc).
+"BalanceDue": 1200000 (Số tiền còn lại khách sẽ trả khi nhận phòng).
+
+### Tính tổng tiền phòng theo ngày và loại ngày lễ
+SELECT * FROM "HotelBookingTable" WHERE PK='HOTEL#MAIN'
+
+### Xem trạng thái các phòng bị khóa vì đã đc book
+SELECT * FROM "HotelBookingTable" WHERE "PK" = 'ROOM#505' AND begins_with("SK", 'NIGHT#')

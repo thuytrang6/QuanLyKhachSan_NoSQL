@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { Bar, Line } from "react-chartjs-2";
 import { adminApi } from "../../api/admin";
 import { VIZ, baseOptions } from "../../components/charts";
@@ -54,6 +55,28 @@ export default function DashboardPage() {
   const avgOcc = occupancy.data
     ? occupancy.data.days.reduce((s, d) => s + d.rate, 0) / occupancy.data.days.length
     : null;
+
+  const qc = useQueryClient();
+  const handleCheckIn = async (bookingId) => {
+    try {
+      await adminApi.checkIn(bookingId);
+      toast.success(`Đã làm thủ tục nhận phòng cho đơn ${bookingId}`);
+      qc.invalidateQueries({ queryKey: ["admin"] });
+    } catch (e) {
+      toast.error(e.response?.data?.error?.message || e.message || "Lỗi khi nhận phòng");
+    }
+  };
+
+  const handleNoShow = async (bookingId) => {
+    if (!window.confirm(`Xác nhận đánh dấu khách không đến (No-Show) cho đơn ${bookingId}? Phòng sẽ được mở lại.`)) return;
+    try {
+      await adminApi.noShow(bookingId);
+      toast.success(`Đã ghi nhận No-Show đơn ${bookingId}, phòng đã mở lại`);
+      qc.invalidateQueries({ queryKey: ["admin"] });
+    } catch (e) {
+      toast.error(e.response?.data?.error?.message || e.message || "Lỗi khi ghi nhận No-Show");
+    }
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-4 py-8">
@@ -202,7 +225,7 @@ export default function DashboardPage() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title={`Khách đến ngày ${formatDate(date)}`} subtitle="GSI3 BKSTATUS#Confirmed, begins_with CHECKIN#<ngày>">
-          <BookingTable q={overview} rows={overview.data && overview.data.arrivals} empty="Không có khách đến trong ngày" />
+          <BookingTable q={overview} rows={overview.data && overview.data.arrivals} empty="Không có khách đến trong ngày" onCheckIn={handleCheckIn} onNoShow={handleNoShow} />
         </Panel>
         <Panel title="Khách đang lưu trú" subtitle="GSI3 BKSTATUS#CheckedIn">
           <BookingTable q={overview} rows={overview.data && overview.data.inHouse} empty="Không có khách đang lưu trú" showCheckout today={date} />
@@ -230,7 +253,7 @@ export default function DashboardPage() {
   );
 }
 
-function BookingTable({ q, rows, empty, showCheckout, today }) {
+function BookingTable({ q, rows, empty, showCheckout, today, onCheckIn, onNoShow }) {
   if (q.isLoading) return <TableSkeleton cols={4} rows={4} />;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
   if (!rows || rows.length === 0) return <EmptyState title={empty} />;
@@ -238,14 +261,21 @@ function BookingTable({ q, rows, empty, showCheckout, today }) {
     <div className="max-h-80 overflow-auto">
       <table className="min-w-full text-sm">
         <thead className="sticky top-0 bg-white">
-          <tr><th className="th">Đơn</th><th className="th">Khách</th><th className="th">Phòng</th><th className="th">{showCheckout ? "Trả phòng" : "Lưu trú"}</th><th className="th">TT</th></tr>
+          <tr>
+            <th className="th">Đơn</th>
+            <th className="th">Khách</th>
+            <th className="th">Phòng</th>
+            <th className="th">{showCheckout ? "Trả phòng" : "Lưu trú"}</th>
+            <th className="th">TT</th>
+            {(onCheckIn || onNoShow) && <th className="th text-right">Thao tác</th>}
+          </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((b) => (
             <tr key={b.BookingID}>
               <td className="td font-medium">{b.BookingID}</td>
               <td className="td">{b.CustomerName}<div className="text-xs text-slate-500">{b.CustomerPhone}</div></td>
-              <td className="td">{b.RoomID}<div className="text-xs text-slate-500">{b.RoomTypeID}</div></td>
+              <td className="td font-semibold text-brand-700">{b.RoomID}<div className="text-xs font-normal text-slate-500">{b.RoomTypeID}</div></td>
               <td className="td whitespace-nowrap">
                 {showCheckout ? (
                   <span className={b.CheckOutDate === today ? "font-semibold text-brand-700" : ""}>
@@ -254,6 +284,30 @@ function BookingTable({ q, rows, empty, showCheckout, today }) {
                 ) : `${b.Nights} đêm`}
               </td>
               <td className="td"><BookingStatusBadge status={b.Status} /></td>
+              {(onCheckIn || onNoShow) && (
+                <td className="td text-right whitespace-nowrap">
+                  <div className="inline-flex gap-1.5">
+                    {onCheckIn && (
+                      <button
+                        onClick={() => onCheckIn(b.BookingID)}
+                        className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 transition"
+                        title="Làm thủ tục nhận phòng"
+                      >
+                        Nhận phòng
+                      </button>
+                    )}
+                    {onNoShow && (
+                      <button
+                        onClick={() => onNoShow(b.BookingID)}
+                        className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-red-50 hover:text-red-700 transition"
+                        title="Khách không đến (Mở lại phòng)"
+                      >
+                        Không đến
+                      </button>
+                    )}
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

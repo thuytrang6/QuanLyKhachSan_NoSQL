@@ -6,7 +6,7 @@ const { isoNow } = require("../utils/time");
 const { notFound, conflict, isTxCanceled } = require("../utils/errors");
 const { clean } = require("../utils/clean");
 
-const ROOM_STATUSES = ["Available", "Occupied", "Cleaning", "Maintenance", "OutOfOrder"];
+const ROOM_STATUSES = ["Available", "Deposited", "Occupied", "Cleaning", "Maintenance", "OutOfOrder"];
 const VERSION_MSG = "Dữ liệu đã bị người khác sửa, tải lại";
 
 // Danh sách phòng cho admin: AP3 lấy toàn bộ phòng (1 item collection nhỏ), lọc rồi chia trang ở server.
@@ -73,8 +73,8 @@ async function updateRoom(roomId, input, staff) {
   if (room.Version !== input.Version) throw conflict(VERSION_MSG, "VERSION_CONFLICT");
 
   const changingStatus = input.Status && input.Status !== room.Status;
-  if (changingStatus && room.Status === "Occupied") {
-    throw conflict(`Phòng ${roomId} đang có khách (Occupied), không thể đổi trạng thái`, "ROOM_OCCUPIED");
+  if (changingStatus && (room.Status === "Occupied" || room.Status === "Deposited")) {
+    throw conflict(`Phòng ${roomId} đang ${room.Status === "Occupied" ? "có khách (Occupied)" : "đang cọc (Deposited)"}, không thể đổi trạng thái`, "ROOM_OCCUPIED");
   }
   const newStatus = changingStatus ? input.Status : room.Status;
   const set = { View: input.View, Amenities: input.Amenities, Images: input.Images };

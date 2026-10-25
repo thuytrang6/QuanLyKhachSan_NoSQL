@@ -13,6 +13,8 @@ export const adminApi = {
   updateRoom: (id, body) => unwrap(http.put(`/admin/rooms/${id}`, body)),
   deleteRoom: (id) => unwrap(http.delete(`/admin/rooms/${id}`)),
   roomLogs: (id) => unwrap(http.get(`/admin/rooms/${id}/logs`)),
+  checkIn: (id) => unwrap(http.post(`/admin/bookings/${id}/checkin`)),
+  noShow: (id) => unwrap(http.post(`/admin/bookings/${id}/noshow`)),
 
   // Backup & Restore
   createBackup: () => unwrap(http.post("/admin/backup")),

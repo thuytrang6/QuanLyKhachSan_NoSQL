@@ -101,7 +101,7 @@ const roomUpdate = z.object({
   View: z.string().trim().min(1, "Nhập hướng nhìn").max(100),
   Amenities: stringList,
   Images: stringList,
-  Status: z.enum(["Available", "Maintenance", "OutOfOrder"], { errorMap: () => ({ message: "Trạng thái chỉ được là Available, Maintenance hoặc OutOfOrder" }) }).optional(),
+  Status: z.enum(["Available", "Deposited", "Maintenance", "OutOfOrder"], { errorMap: () => ({ message: "Trạng thái chỉ được là Available, Deposited, Maintenance hoặc OutOfOrder" }) }).optional(),
   MaintenanceNote: z.string().trim().max(300).optional(),
   Reason: z.string().trim().max(300).optional(),
 });

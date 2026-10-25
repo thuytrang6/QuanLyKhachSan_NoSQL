@@ -398,6 +398,38 @@ async function updateNotes(user, bookingId, notes) {
   return { BookingID: bookingId, Notes: notes };
 }
 
+// Quản trị viên/Lễ tân nhận phòng (Check-in) cho khách: Booking Confirmed -> CheckedIn, Room Deposited -> Occupied
+async function checkIn(staff, bookingId) {
+  const { booking } = await loadBooking(bookingId);
+  if (booking.Status !== "Confirmed") {
+    throw conflict(`Đơn ${bookingId} đang ở trạng thái ${booking.Status}, chỉ đơn Confirmed mới có thể Check-in`, "INVALID_STATUS");
+  }
+  const now = isoNow();
+  try {
+    await bookingRepo.checkInBooking(booking, staff, now);
+  } catch (e) {
+    if (isTxCanceled(e)) throw conflict("Dữ liệu đã bị người khác sửa hoặc phòng không khả dụng", "VERSION_CONFLICT");
+    throw e;
+  }
+  return { BookingID: bookingId, Status: "CheckedIn", RoomID: booking.RoomID };
+}
+
+// Quản trị viên/Lễ tân đánh dấu khách không đến (No-Show): Booking Confirmed -> NoShow, mở lại phòng và giải phóng các đêm
+async function noShow(staff, bookingId) {
+  const { booking } = await loadBooking(bookingId);
+  if (booking.Status !== "Confirmed") {
+    throw conflict(`Đơn ${bookingId} đang ở trạng thái ${booking.Status}, chỉ đơn Confirmed mới có thể đánh dấu No-Show`, "INVALID_STATUS");
+  }
+  const now = isoNow();
+  try {
+    await bookingRepo.noShowBooking(booking, staff, now);
+  } catch (e) {
+    if (isTxCanceled(e)) throw conflict("Dữ liệu đã bị người khác sửa, vui lòng tải lại", "VERSION_CONFLICT");
+    throw e;
+  }
+  return { BookingID: bookingId, Status: "NoShow", RoomID: booking.RoomID };
+}
+
 module.exports = {
   searchRooms,
   roomDetail,
@@ -408,4 +440,6 @@ module.exports = {
   payDeposit,
   cancelBooking,
   updateNotes,
+  checkIn,
+  noShow,
 };

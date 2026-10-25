@@ -4,6 +4,7 @@ const fs = require("fs");
 const { z } = require("zod");
 const reportService = require("../services/report");
 const roomService = require("../services/room");
+const bookingService = require("../services/booking");
 const backupService = require("../services/backup");
 const S = require("../validation/schemas");
 const { validate } = require("../middlewares/validate");
@@ -14,6 +15,9 @@ router.use(requireAuth, requireRole("admin"));
 
 const roomIdParam = (req, res, next) =>
   (/^\w{1,10}$/.test(req.params.id) ? next() : next(badRequest("Mã phòng không hợp lệ")));
+
+const bookingIdParam = (req, res, next) =>
+  (/^BK\d{6,}$/.test(req.params.id) ? next() : next(badRequest("Mã đặt phòng không hợp lệ")));
 
 // ---------- Báo cáo ----------
 router.get("/reports/revenue", validate(z.object({ year: z.coerce.number().int().min(2000).max(2100) }), "query"),
@@ -52,6 +56,13 @@ router.delete("/rooms/:id", roomIdParam,
 
 router.get("/rooms/:id/logs", roomIdParam,
   asyncHandler(async (req, res) => res.json({ data: await roomService.listLogs(req.params.id) })));
+
+// ---------- Thao tác Booking cho Admin (Check-in & No-Show) ----------
+router.post("/bookings/:id/checkin", bookingIdParam,
+  asyncHandler(async (req, res) => res.json({ data: await bookingService.checkIn(req.user, req.params.id) })));
+
+router.post("/bookings/:id/noshow", bookingIdParam,
+  asyncHandler(async (req, res) => res.json({ data: await bookingService.noShow(req.user, req.params.id) })));
 
 // ---------- Sao lưu & Phục hồi (Backup & Restore) ----------
 router.post("/backup",

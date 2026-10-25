@@ -14,10 +14,15 @@ export default function ProtectedRoute({ role, children }) {
 
 export const homeOf = (user) => (!user ? "/" : user.role === "admin" ? "/admin" : "/");
 
-// Sau đăng nhập/đăng ký: quay lại trang đang xem (vd. chi tiết phòng) nếu hợp lệ, ngược lại về trang chính
+// Sau đăng nhập/đăng ký:
+// - Với Admin: luôn chuyển thẳng đến trang chủ Dashboard /admin (hoặc giữ trang nội bộ /admin/* nếu đang truy cập dở)
+// - Với User (Khách hàng): quay lại trang đang xem (ví dụ: chi tiết phòng /rooms/:id) để tiếp tục thao tác
 export function afterAuthPath(user, from) {
-  if (!from || from === "/login" || from === "/register") return homeOf(user);
-  if (user.role === "customer" && from.startsWith("/admin")) return "/";
-  if (user.role === "admin" && (from.startsWith("/booking/") || from.startsWith("/my-bookings"))) return "/admin";
+  if (!user) return "/";
+  if (user.role === "admin") {
+    return from && from.startsWith("/admin") ? from : "/admin";
+  }
+  // User (Khách hàng): nếu from không hợp lệ hoặc là trang admin thì về trang chủ /
+  if (!from || from === "/login" || from === "/register" || from.startsWith("/admin")) return "/";
   return from;
 }

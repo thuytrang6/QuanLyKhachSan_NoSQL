@@ -92,10 +92,22 @@ async function runAllTests() {
     } else throw new Error(`Kỳ vọng 403 nhưng nhận ${res.status}`);
   } catch (e) { fail("TC-03", e.message); }
 
+async function cleanRoomNights(roomId) {
+  const nights = await ddb.send(new QueryCommand({
+    TableName: TABLE,
+    KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+    ExpressionAttributeValues: { ":pk": `ROOM#${roomId}`, ":sk": "NIGHT#" },
+  })).catch(() => ({ Items: [] }));
+  for (const item of (nights.Items || [])) {
+    await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: item.PK, SK: item.SK } })).catch(() => {});
+  }
+}
+
   // TC-04: Admin tạo phòng mới 505
   try {
-    // Dọn sạch phòng TEST_ROOM trong DB nếu sót từ phiên trước
+    // Dọn sạch phòng TEST_ROOM và các đêm phòng trong DB nếu sót từ phiên trước
     await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: "HOTEL#MAIN", SK: `ROOM#${TEST_ROOM}` } })).catch(() => {});
+    await cleanRoomNights(TEST_ROOM);
 
     const res = await request("/admin/rooms", {
       method: "POST",
@@ -448,6 +460,10 @@ async function runAllTests() {
       }
     } else throw new Error(`Status ${delRes.status}: ${JSON.stringify(delRes.data)}`);
   } catch (e) { fail("TC-14/15", e.message); }
+
+  // Dọn phòng TEST_ROOM sau khi chạy xong để trả về môi trường sạch
+  await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: "HOTEL#MAIN", SK: `ROOM#${TEST_ROOM}` } })).catch(() => {});
+  await cleanRoomNights(TEST_ROOM);
 
   console.log(`\n${colors.bold}========================================================================${colors.reset}`);
   console.log(`${colors.green}${colors.bold}   HOÀN TẤT TẤT CẢ CÁC BÀI TEST & ĐÃ KIỂM TRA CHỨNG THỰC DƯỚI DYNAMODB!   ${colors.reset}`);
